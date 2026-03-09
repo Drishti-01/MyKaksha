@@ -14,5 +14,7 @@
       "sessions": 0,
       "totalSeconds": 129
     }
-  }
+  },
+  "tasks": [],
+  "taskEvents": {}
 }

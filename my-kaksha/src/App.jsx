@@ -3,6 +3,7 @@ import Landing from "./components/landing";
 import Dashboard from "./Dashboard";
 import StudyGroupPage from "./StudyGroup";
 import ProjectTracker from "./components/ProjectTracker";
+import Analytics from "./Analytics";
 
 function DashboardPage() {
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ function App() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/analytics" element={<Analytics />} />
       <Route path="/study-group" element={<StudyGroupPage />} />
       <Route path="/projects" element={<ProjectTracker />} />
     </Routes>

@@ -453,7 +453,7 @@ const trackerPreviewThemes = {
   Activities: "linear-gradient(140deg, #c4d8e8, #e8f4fb)",
 };
 
-const navItems = ["Dashboard", "Home", "Study Group"];
+const navItems = ["Dashboard", "Analytics", "Home", "Study Group"];
 
 function formatTime(totalSeconds) {
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
@@ -827,6 +827,10 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
                   setActiveNav(item);
                   if (item === "Home") {
                     onBackToLanding?.();
+                    return;
+                  }
+                  if (item === "Analytics") {
+                    navigate("/analytics");
                     return;
                   }
                   if (item === "Study Group") {
