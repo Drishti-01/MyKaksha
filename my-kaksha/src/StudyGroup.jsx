@@ -3,74 +3,101 @@ import { useNavigate } from "react-router-dom";
 
 
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 
   * { box-sizing: border-box; }
 
   .sg-shell {
     min-height: 100vh;
     display: grid;
-    grid-template-columns: 260px 1fr;
-    background: radial-gradient(circle at top, #f6ecdf 0%, #faf8f3 55%);
-    color: #544437;
-    font-family: 'Outfit', 'Segoe UI', sans-serif;
+    grid-template-columns: 280px 1fr;
+    background: radial-gradient(circle at top right, #f3e8da 0%, #faf8f3 42%);
+    color: #5a4a3a;
+    font-family: 'Poppins', sans-serif;
   }
 
+  .sg-shell.collapsed { grid-template-columns: 94px 1fr; }
+
   .sg-sidebar {
-    background: linear-gradient(180deg, #fffdfa, #f5eee4);
-    border-right: 1px solid #ead8c7;
-    padding: 28px 18px;
+    background: linear-gradient(180deg, #fffdf9, #f5efe6);
+    border-right: 1px solid #eed6c4;
+    padding: 24px 16px;
     display: flex;
     flex-direction: column;
     gap: 20px;
+    min-height: 100vh;
+    position: sticky;
+    top: 0;
   }
 
-  .sg-brand {
-    font-size: 1.3rem;
+  .sg-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .sg-brand { font-size: 1.2rem; font-weight: 800; color: #8b6f5e; white-space: nowrap; }
+  .sg-brand span { color: #c8b6a6; }
+
+  .sg-toggle {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid #eed6c4;
+    background: #faf8f3;
+    color: #8b6f5e;
+    cursor: pointer;
     font-weight: 700;
-    color: #7f6654;
   }
 
-  .sg-brand span { color: #c1a792; }
-
-  .sg-nav { display: grid; gap: 10px; }
-
-  .sg-nav button {
+  .sg-nav { display: grid; gap: 8px; }
+  .sg-nav-btn {
     border: 1px solid transparent;
     background: transparent;
-    padding: 12px 14px;
-    border-radius: 14px;
+    color: #8b6f5e;
+    padding: 12px;
+    border-radius: 12px;
     text-align: left;
-    font-weight: 600;
-    color: #866f5d;
-    cursor: pointer;
     display: flex;
     align-items: center;
     gap: 10px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
   }
+  .sg-nav-btn:hover { background: #f5efe6; border-color: #eed6c4; }
+  .sg-nav-btn.active {
+    background: linear-gradient(135deg, #eed6c4, #dac1ad);
+    border-color: #c8b6a6;
+    color: #4a3728;
+  }
+  .sg-dot { width: 8px; height: 8px; border-radius: 50%; background: #c8b6a6; flex-shrink: 0; }
 
-  .sg-nav button.active {
-    background: linear-gradient(135deg, #f2dfd0, #e5cbbb);
-    border-color: #d7baa5;
-    color: #4b3528;
-  }
-
-  .sg-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #d7baa5;
-  }
+  .sg-shell.collapsed .sg-brand,
+  .sg-shell.collapsed .sg-label,
+  .sg-shell.collapsed .sg-note,
+  .sg-shell.collapsed .sg-back-btn { display: none; }
+  .sg-shell.collapsed .sg-nav-btn { justify-content: center; }
 
   .sg-note {
     margin-top: auto;
-    border: 1px solid #ead8c7;
-    border-radius: 16px;
-    padding: 14px;
-    background: #fffdf9;
-    font-size: 0.85rem;
-    color: #7c6655;
+    border: 1px solid #eed6c4;
+    background: #faf8f3;
+    border-radius: 14px;
+    padding: 10px;
+    color: #8b6f5e;
+    font-size: 0.76rem;
+    line-height: 1.5;
   }
+
+  .sg-back-btn {
+    width: 100%;
+    margin-top: 8px;
+    border-radius: 999px;
+    border: 1px solid #eed6c4;
+    background: #f5efe6;
+    color: #8b6f5e;
+    font-family: inherit;
+    font-weight: 600;
+    padding: 10px 14px;
+    cursor: pointer;
+  }
+  .sg-back-btn:hover { background: #fffdf9; }
 
   .sg-main { padding: 32px; }
 
@@ -324,7 +351,7 @@ const css = `
   }
 `;
 
-const navItems = ["Dashboard", "Home", "Study Group"];
+const navItems = ["Dashboard", "Analytics", "Study Group"];
 
 const groupInfo = {
   name: "Placement Prep",
@@ -576,6 +603,7 @@ function CollaborationSection() {
 export default function StudyGroupPage() {
   const navigate = useNavigate();
   const [activeNav, setActiveNav] = useState("Study Group");
+  const [collapsed, setCollapsed] = useState(false);
   const todayLabel = useMemo(
     () =>
       new Date().toLocaleDateString("en-IN", {
@@ -592,29 +620,41 @@ export default function StudyGroupPage() {
       navigate("/dashboard");
       return;
     }
-    if (item === "Home") {
-      navigate("/");
+    if (item === "Analytics") {
+      navigate("/analytics");
     }
   }
 
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: css }} />
-      <div className="sg-shell">
+      <div className={`sg-shell ${collapsed ? "collapsed" : ""}`}>
         <aside className="sg-sidebar">
-          <div className="sg-brand">My <span>Kaksha</span></div>
+          <div className="sg-brand-row">
+            <div className="sg-brand">My <span>Kaksha</span></div>
+            <button
+              type="button"
+              className="sg-toggle"
+              aria-label="Toggle Sidebar"
+              onClick={() => setCollapsed((prev) => !prev)}
+            >
+              {collapsed ? ">" : "<"}
+            </button>
+          </div>
           <nav className="sg-nav" aria-label="Study group navigation">
             {navItems.map((item) => (
               <button
                 key={item}
-                className={item === activeNav ? "active" : ""}
+                type="button"
+                className={`sg-nav-btn ${item === activeNav ? "active" : ""}`}
                 onClick={() => handleNav(item)}
               >
                 <span className="sg-dot" aria-hidden="true" />
-                <span>{item}</span>
+                <span className="sg-label">{item}</span>
               </button>
             ))}
           </nav>
+          <button type="button" className="sg-back-btn" onClick={() => navigate("/")}>Back to Home</button>
           <div className="sg-note">
             Study together, keep it gentle, and celebrate every focused block.
           </div>

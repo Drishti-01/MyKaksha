@@ -79,6 +79,20 @@ const css = `
     line-height: 1.5;
   }
 
+  .a-back-btn {
+    margin-top: 6px;
+    width: 100%;
+    border: 1px solid #eed6c4;
+    background: #fffdf9;
+    border-radius: 999px;
+    padding: 10px 14px;
+    color: #8b6f5e;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .a-back-btn:hover { background: #f5efe6; }
+
   .a-main { padding: 26px; overflow: hidden; }
   .a-head-wrap {
     position: relative;
@@ -318,6 +332,8 @@ function shortDuration(totalSeconds) {
   return `${mins}m`;
 }
 
+const navItems = ["Dashboard", "Analytics", "Study Group"];
+
 export default function Analytics() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
@@ -421,6 +437,17 @@ export default function Analytics() {
     ? Math.round(((topGoal?.totalSeconds ?? 0) / totalSeconds) * 100)
     : 0;
 
+  function handleNav(item) {
+    if (item === "Analytics") return;
+    if (item === "Dashboard") {
+      navigate("/dashboard");
+      return;
+    }
+    if (item === "Study Group") {
+      navigate("/study-group");
+    }
+  }
+
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: css }} />
@@ -435,19 +462,20 @@ export default function Analytics() {
           </div>
 
           <nav className="a-nav" aria-label="Analytics Navigation">
-            <button className="a-nav-btn" onClick={() => navigate("/dashboard")}>
-              <span className="a-dot" aria-hidden="true" />
-              <span className="a-label">Dashboard</span>
-            </button>
-            <button className="a-nav-btn active">
-              <span className="a-dot" aria-hidden="true" />
-              <span className="a-label">Analytics</span>
-            </button>
-            <button className="a-nav-btn" onClick={() => navigate("/")}>
-              <span className="a-dot" aria-hidden="true" />
-              <span className="a-label">Landing</span>
-            </button>
+            {navItems.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={`a-nav-btn ${item === "Analytics" ? "active" : ""}`}
+                onClick={() => handleNav(item)}
+              >
+                <span className="a-dot" aria-hidden="true" />
+                <span className="a-label">{item}</span>
+              </button>
+            ))}
           </nav>
+
+          <button className="a-back-btn" onClick={() => navigate("/")}>Back to Home</button>
 
           <div className="a-note">
             Visual analytics combines your goal focus time and daily task completion trends.
