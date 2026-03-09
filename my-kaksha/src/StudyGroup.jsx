@@ -324,7 +324,7 @@ const css = `
   }
 `;
 
-const navItems = ["Home", "About", "Settings", "Study Group", "Back to Landing"];
+const navItems = ["Dashboard", "Home", "Study Group"];
 
 const groupInfo = {
   name: "Placement Prep",
@@ -588,8 +588,13 @@ export default function StudyGroupPage() {
 
   function handleNav(item) {
     setActiveNav(item);
-    if (item === "Home") navigate("/dashboard");
-    if (item === "Back to Landing") navigate("/");
+    if (item === "Dashboard") {
+      navigate("/dashboard");
+      return;
+    }
+    if (item === "Home") {
+      navigate("/");
+    }
   }
 
   return (

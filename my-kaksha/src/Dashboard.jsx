@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { fetchStudyData, saveStudyData } from "./api/studyData";
 
 const css = `
@@ -296,6 +295,8 @@ const trackerPreviewThemes = {
   Activities: "linear-gradient(140deg, #c4d8e8, #e8f4fb)",
 };
 
+const navItems = ["Dashboard", "Home", "Study Group"];
+
 function formatTime(totalSeconds) {
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
   const seconds = String(totalSeconds % 60).padStart(2, "0");
@@ -485,11 +486,6 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
     setMode("focus");
     setSecondsLeft(goal.minutes * 60);
     setRunning(false);
-  }
-
-  function navTo(label, path) {
-    setActiveNav(label);
-    navigate(path);
   }
 
   return (
