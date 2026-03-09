@@ -1,14 +1,25 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useNavigate } from "react-router-dom";
 import Landing from "./components/landing";
 import Dashboard from "./Dashboard";
-import Analytics from "./Analytics";
+import StudyGroupPage from "./StudyGroup";
+
+function DashboardPage() {
+  const navigate = useNavigate();
+
+  return (
+    <Dashboard
+      onBackToLanding={() => navigate("/")}
+      onGoToStudyGroup={() => navigate("/study-group")}
+    />
+  );
+}
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
-      <Route path="/dashboard" element={<Dashboard />} />
-      <Route path="/analytics" element={<Analytics />} />
+      <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/study-group" element={<StudyGroupPage />} />
     </Routes>
   );
 }

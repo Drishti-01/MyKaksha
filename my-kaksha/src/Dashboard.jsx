@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { fetchStudyData, saveStudyData } from "./api/studyData";
 
 const css = `
@@ -296,6 +295,8 @@ const trackerPreviewThemes = {
   Activities: "linear-gradient(140deg, #c4d8e8, #e8f4fb)",
 };
 
+const navItems = ["Dashboard", "Home", "Study Group"];
+
 function formatTime(totalSeconds) {
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
   const seconds = String(totalSeconds % 60).padStart(2, "0");
@@ -315,8 +316,7 @@ function normalizeTask(task) {
   };
 }
 
-export default function Dashboard() {
-  const navigate = useNavigate();
+export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
   const [collapsed, setCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("Dashboard");
 
@@ -537,11 +537,6 @@ export default function Dashboard() {
     setRunning(false);
   }
 
-  function navTo(label, path) {
-    setActiveNav(label);
-    navigate(path);
-  }
-
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: css }} />
@@ -556,18 +551,25 @@ export default function Dashboard() {
           </div>
 
           <nav className="d-nav" aria-label="Dashboard Navigation">
-            <button className={`d-nav-btn ${activeNav === "Dashboard" ? "active" : ""}`} onClick={() => setActiveNav("Dashboard")}>
-              <span className="d-dot" aria-hidden="true" />
-              <span className="d-label">Dashboard</span>
-            </button>
-            <button className={`d-nav-btn ${activeNav === "Analytics" ? "active" : ""}`} onClick={() => navTo("Analytics", "/analytics")}>
-              <span className="d-dot" aria-hidden="true" />
-              <span className="d-label">Analytics</span>
-            </button>
-            <button className="d-nav-btn" onClick={() => navigate("/")}>
-              <span className="d-dot" aria-hidden="true" />
-              <span className="d-label">Landing</span>
-            </button>
+            {navItems.map((item) => (
+              <button
+                key={item}
+                className={`d-nav-btn ${activeNav === item ? "active" : ""}`}
+                onClick={() => {
+                  setActiveNav(item);
+                  if (item === "Home") {
+                    onBackToLanding?.();
+                    return;
+                  }
+                  if (item === "Study Group") {
+                    onGoToStudyGroup?.();
+                  }
+                }}
+              >
+                <span className="d-dot" aria-hidden="true" />
+                <span className="d-label">{item}</span>
+              </button>
+            ))}
           </nav>
 
           <div className="d-note">
