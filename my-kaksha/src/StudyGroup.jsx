@@ -237,13 +237,95 @@ const css = `
     flex-wrap: wrap;
   }
 
-  .sg-leaderboard {
-    margin: 0;
-    padding-left: 18px;
-    color: #6e5645;
-    display: grid;
-    gap: 8px;
+  .sg-leaderboard-top {
+    border: 1px solid #ead8c7;
+    border-radius: 18px;
+    padding: 16px 18px;
+    background: linear-gradient(135deg, #fbe9da, #f5efe6);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
   }
+
+  .sg-leaderboard-top h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: #4a3629;
+  }
+
+  .sg-leaderboard-top p {
+    margin: 4px 0 0;
+    color: #7a5c49;
+    font-size: 0.85rem;
+  }
+
+  .sg-crown {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    background: #fffdf9;
+    border: 1px solid #ead8c7;
+    display: grid;
+    place-items: center;
+    font-size: 1.4rem;
+  }
+
+  .sg-leaderboard {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+  }
+
+  .sg-leaderboard-row {
+    border: 1px solid #ead8c7;
+    border-radius: 16px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #fffdf9;
+  }
+
+  .sg-leaderboard-rank {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    background: #f5efe6;
+    color: #8b6f5e;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+  }
+
+  .sg-leaderboard-info { flex: 1; }
+  .sg-leaderboard-name { margin: 0; font-weight: 600; color: #4a3629; }
+
+  .sg-leaderboard-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.82rem;
+    color: #8b6f5e;
+  }
+
+  .sg-leaderboard-progress {
+    flex: 1;
+    height: 6px;
+    border-radius: 999px;
+    background: #f1dfcf;
+    overflow: hidden;
+  }
+
+  .sg-leaderboard-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #c8b6a6, #8b6f5e);
+  }
+
 
   .sg-members-grid {
     display: grid;
@@ -473,15 +555,50 @@ function PomodoroTimer() {
 }
 
 function Leaderboard({ entries }) {
+  if (!entries || entries.length === 0) {
+    return (
+      <article className="sg-card" aria-labelledby="leaderboard">
+        <h2 id="leaderboard">Leaderboard</h2>
+        <p style={{ color: "#8c7766", margin: 0 }}>No focus sessions logged yet.</p>
+      </article>
+    );
+  }
+
+  const orderedEntries = [...entries].sort(
+    (a, b) => (Number(b.hours) || 0) - (Number(a.hours) || 0)
+  );
+  const maxHours = Math.max(1, ...orderedEntries.map((entry) => Number(entry.hours) || 0));
+  const [topEntry] = orderedEntries;
+
   return (
     <article className="sg-card" aria-labelledby="leaderboard">
       <h2 id="leaderboard">Leaderboard</h2>
+      <div className="sg-leaderboard-top">
+        <div>
+          <h3>Top Focus</h3>
+          <p>{topEntry.name} leads with {topEntry.hours} hrs this week.</p>
+        </div>
+        <div className="sg-crown" aria-hidden="true">🏆</div>
+      </div>
       <ol className="sg-leaderboard">
-        {entries.map((entry) => (
-          <li key={entry.name}>
-            {entry.name} — {entry.hours} hrs
-          </li>
-        ))}
+        {orderedEntries.map((entry, index) => {
+          const share = Math.round(((entry.hours || 0) / maxHours) * 100);
+          return (
+            <li key={entry.name} className="sg-leaderboard-row">
+              <span className="sg-leaderboard-rank">#{index + 1}</span>
+              <div className="sg-leaderboard-info">
+                <p className="sg-leaderboard-name">{entry.name}</p>
+                <div className="sg-leaderboard-meta">
+                  <span>{entry.hours} hrs</span>
+                  <div className="sg-leaderboard-progress" aria-hidden="true">
+                    <div className="sg-leaderboard-progress-fill" style={{ width: `${share}%` }} />
+                  </div>
+                  <span style={{ fontWeight: 600 }}>{share}%</span>
+                </div>
+              </div>
+            </li>
+          );
+        })}
       </ol>
     </article>
   );

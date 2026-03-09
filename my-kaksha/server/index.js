@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 4000;
 const dataDir = path.join(__dirname, "data");
 const dataFile = path.join(dataDir, "study-data.json");
+const usersFile = path.join(dataDir, "users.json");
 
 const defaultData = {
   goals: [],
@@ -41,7 +42,7 @@ function writeJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,PUT,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,PUT,POST,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   });
   res.end(JSON.stringify(payload));
@@ -50,10 +51,25 @@ function writeJson(res, statusCode, payload) {
 function writeNoContent(res) {
   res.writeHead(204, {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,PUT,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,PUT,POST,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   });
   res.end();
+}
+
+async function readUsers() {
+  try {
+    const raw = await readFile(usersFile, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeUsers(users) {
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(usersFile, JSON.stringify(users, null, 2), "utf8");
 }
 
 async function parseBody(req) {
@@ -103,6 +119,66 @@ const server = http.createServer(async (req, res) => {
       };
       await writeStudyData(payload);
       writeJson(res, 200, { ok: true });
+    } catch {
+      writeJson(res, 400, { ok: false, error: "Invalid request body" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/signup") {
+    try {
+      const body = await parseBody(req);
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      const password = typeof body.password === "string" ? body.password : "";
+
+      if (!name || !email || !password) {
+        writeJson(res, 400, { ok: false, error: "Missing required fields" });
+        return;
+      }
+
+      const users = await readUsers();
+      if (users.some((user) => user.email === email)) {
+        writeJson(res, 409, { ok: false, error: "Email already registered" });
+        return;
+      }
+
+      const newUser = {
+        id: Date.now(),
+        name,
+        email,
+        password,
+      };
+
+      users.push(newUser);
+      await writeUsers(users);
+      writeJson(res, 201, { ok: true, message: "Signup successful" });
+    } catch {
+      writeJson(res, 400, { ok: false, error: "Invalid request body" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/login") {
+    try {
+      const body = await parseBody(req);
+      const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      const password = typeof body.password === "string" ? body.password : "";
+
+      if (!email || !password) {
+        writeJson(res, 400, { ok: false, error: "Missing credentials" });
+        return;
+      }
+
+      const users = await readUsers();
+      const match = users.find((user) => user.email === email && user.password === password);
+
+      if (!match) {
+        writeJson(res, 401, { ok: false, error: "Invalid email or password" });
+        return;
+      }
+
+      writeJson(res, 200, { ok: true, message: "Login successful", user: { email: match.email, name: match.name } });
     } catch {
       writeJson(res, 400, { ok: false, error: "Invalid request body" });
     }

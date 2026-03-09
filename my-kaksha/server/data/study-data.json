@@ -32,6 +32,12 @@
   },
   "tasks": [
     {
+      "id": 1773084990648,
+      "text": "Do BackEnd",
+      "done": false,
+      "createdAt": 1773084990648
+    },
+    {
       "id": 1773078453543,
       "text": "Submit assignment before 12",
       "done": false,
@@ -61,6 +67,10 @@
   "taskEvents": {
     "2026-03-09": {
       "added": 4,
+      "completed": 0
+    },
+    "2026-03-10": {
+      "added": 1,
       "completed": 0
     }
   }
