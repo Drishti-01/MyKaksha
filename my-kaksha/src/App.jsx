@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import Dashboard from "./Dashboard";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
@@ -530,6 +531,12 @@ const testimonials = [
 const chartData = [{d:"Mon",h:55},{d:"Tue",h:70},{d:"Wed",h:45},{d:"Thu",h:80},{d:"Fri",h:65},{d:"Sat",h:90},{d:"Sun",h:40}];
 
 export default function MyKaksha() {
+  const [showDashboard, setShowDashboard] = useState(false);
+
+  if (showDashboard) {
+    return <Dashboard onBackToLanding={() => setShowDashboard(false)} />;
+  }
+
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: css}} />
@@ -543,7 +550,7 @@ export default function MyKaksha() {
           <li><a href="#how">How It Works</a></li>
           <li><a href="#stories">Stories</a></li>
         </ul>
-        <button className="nav-cta">Get Started Free ✨</button>
+        <button className="nav-cta" onClick={() => setShowDashboard(true)}>Get Started Free ✨</button>
       </nav>
 
       {/* HERO */}
@@ -558,7 +565,7 @@ export default function MyKaksha() {
           <h1 className="h1">Study, But Make<br />It <span className="uw">Consistent.</span></h1>
           <p className="hsub">My Kaksha is your warm, aesthetic digital study space — built to help students build habits, track focus, and actually show up for themselves every single day. 🌿</p>
           <div className="bgrp">
-            <button className="bp">Start Studying Free ✨</button>
+            <button className="bp" onClick={() => setShowDashboard(true)}>Start Studying Free ✨</button>
             <button className="bs">See How It Works →</button>
           </div>
         </div>
@@ -712,7 +719,7 @@ export default function MyKaksha() {
           <h2 className="ctat">Your best study era starts today 🌸</h2>
           <p className="ctas2">Join thousands of students building better habits with My Kaksha.</p>
           <div style={{display:"flex",gap:16,justifyContent:"center",flexWrap:"wrap"}}>
-            <button className="bp" style={{fontSize:"1rem",padding:"16px 40px"}}>Start for Free ✨</button>
+            <button className="bp" style={{fontSize:"1rem",padding:"16px 40px"}} onClick={() => setShowDashboard(true)}>Start for Free ✨</button>
             <button className="bs" style={{fontSize:"1rem",padding:"16px 40px"}}>See Features →</button>
           </div>
         </FadeIn>
