@@ -1,11 +1,19 @@
-import Landing from "./components/Landing";
-import { useState, useEffect, useRef } from "react";
+import { Routes, Route, useNavigate } from "react-router-dom";
+import Landing from "./components/landing";
+import Dashboard from "./Dashboard";
+
+function DashboardPage() {
+  const navigate = useNavigate();
+
+  return <Dashboard onBackToLanding={() => navigate("/")} />;
+}
 
 function App() {
   return (
-    <div>
-      <Landing />
-    </div>
+    <Routes>
+      <Route path="/" element={<Landing />} />
+      <Route path="/dashboard" element={<DashboardPage />} />
+    </Routes>
   );
 }
 export default App;
