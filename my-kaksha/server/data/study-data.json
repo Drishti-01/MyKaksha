@@ -1,6 +1,11 @@
 {
   "goals": [
     {
+      "id": 1773078274045,
+      "title": "100 pages of CASA book",
+      "minutes": 40
+    },
+    {
       "id": 1773073371865,
       "title": "Cyber",
       "minutes": 20
@@ -13,8 +18,50 @@
       "targetMinutes": 20,
       "sessions": 0,
       "totalSeconds": 129
+    },
+    "1773078274045": {
+      "id": 1773078274045,
+      "title": "100 pages of CASA book",
+      "targetMinutes": 40,
+      "sessions": 0,
+      "totalSeconds": 68,
+      "dailySeconds": {
+        "2026-03-09": 68
+      }
     }
   },
-  "tasks": [],
-  "taskEvents": {}
+  "tasks": [
+    {
+      "id": 1773078453543,
+      "text": "Submit assignment before 12",
+      "done": false,
+      "createdAt": 1773078453543
+    },
+    {
+      "id": 1773078377786,
+      "text": "Prepare for tommorow's FA",
+      "done": true,
+      "createdAt": 1773078377786,
+      "updatedAt": 1773078455150
+    },
+    {
+      "id": 1773078336189,
+      "text": "Read React documentation",
+      "done": true,
+      "createdAt": 1773078336189,
+      "updatedAt": 1773078457801
+    },
+    {
+      "id": 1773078285436,
+      "text": "Do DSA questions",
+      "done": false,
+      "createdAt": 1773078285436
+    }
+  ],
+  "taskEvents": {
+    "2026-03-09": {
+      "added": 4,
+      "completed": 0
+    }
+  }
 }
