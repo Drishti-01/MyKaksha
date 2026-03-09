@@ -1,6 +1,8 @@
 const DEFAULT_STUDY_DATA = {
   goals: [],
   goalStats: {},
+  tasks: [],
+  taskEvents: {},
 };
 
 export async function fetchStudyData() {
@@ -13,6 +15,8 @@ export async function fetchStudyData() {
   return {
     goals: Array.isArray(data.goals) ? data.goals : DEFAULT_STUDY_DATA.goals,
     goalStats: data.goalStats && typeof data.goalStats === "object" ? data.goalStats : DEFAULT_STUDY_DATA.goalStats,
+    tasks: Array.isArray(data.tasks) ? data.tasks : DEFAULT_STUDY_DATA.tasks,
+    taskEvents: data.taskEvents && typeof data.taskEvents === "object" ? data.taskEvents : DEFAULT_STUDY_DATA.taskEvents,
   };
 }
 

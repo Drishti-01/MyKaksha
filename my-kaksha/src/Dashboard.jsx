@@ -302,6 +302,19 @@ function formatTime(totalSeconds) {
   return `${minutes}:${seconds}`;
 }
 
+function getDateKey(date = new Date()) {
+  const offsetMins = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - offsetMins * 60_000);
+  return localDate.toISOString().slice(0, 10);
+}
+
+function normalizeTask(task) {
+  return {
+    ...task,
+    createdAt: Number(task.createdAt) || Date.now(),
+  };
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
@@ -314,10 +327,8 @@ export default function Dashboard() {
   const [running, setRunning] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(25 * 60);
 
-  const [tasks, setTasks] = useState([
-    { id: 1, text: "Revise DBMS unit 3", done: false },
-    { id: 2, text: "Complete DAA notes", done: true },
-  ]);
+  const [tasks, setTasks] = useState([]);
+  const [taskEvents, setTaskEvents] = useState({});
   const [taskText, setTaskText] = useState("");
 
   const [goals, setGoals] = useState([]);
@@ -341,6 +352,7 @@ export default function Dashboard() {
       }),
     []
   );
+  const todayKey = useMemo(() => getDateKey(), []);
 
   useEffect(() => {
     let mounted = true;
@@ -351,10 +363,14 @@ export default function Dashboard() {
         if (!mounted) return;
         setGoals(data.goals);
         setGoalStats(data.goalStats);
+        setTasks(data.tasks.map(normalizeTask));
+        setTaskEvents(data.taskEvents);
       } catch {
         if (!mounted) return;
         setGoals([]);
         setGoalStats({});
+        setTasks([]);
+        setTaskEvents({});
       } finally {
         if (mounted) setDataReady(true);
       }
@@ -368,8 +384,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!dataReady) return;
-    saveStudyData({ goals, goalStats }).catch(() => {});
-  }, [goals, goalStats, dataReady]);
+    saveStudyData({ goals, goalStats, tasks, taskEvents }).catch(() => {});
+  }, [goals, goalStats, tasks, taskEvents, dataReady]);
 
   useEffect(() => {
     setSecondsLeft((mode === "focus" ? focusMinutes : breakMinutes) * 60);
@@ -392,6 +408,10 @@ export default function Dashboard() {
           title: goal.title,
           targetMinutes: goal.minutes,
           totalSeconds: previous.totalSeconds + 1,
+          dailySeconds: {
+            ...(previous.dailySeconds ?? {}),
+            [todayKey]: (previous.dailySeconds?.[todayKey] ?? 0) + 1,
+          },
         },
       };
     });
@@ -457,12 +477,41 @@ export default function Dashboard() {
   function addTask() {
     const value = taskText.trim();
     if (!value) return;
-    setTasks((prev) => [{ id: Date.now(), text: value, done: false }, ...prev]);
+    setTasks((prev) => [{ id: Date.now(), text: value, done: false, createdAt: Date.now() }, ...prev]);
+    setTaskEvents((prev) => {
+      const day = prev[todayKey] ?? { added: 0, completed: 0 };
+      return {
+        ...prev,
+        [todayKey]: { ...day, added: day.added + 1 },
+      };
+    });
     setTaskText("");
   }
 
   function toggleTask(id) {
-    setTasks((prev) => prev.map((task) => (task.id === id ? { ...task, done: !task.done } : task)));
+    let becameDone = false;
+    let becameUndone = false;
+
+    setTasks((prev) =>
+      prev.map((task) => {
+        if (task.id !== id) return task;
+        const nextDone = !task.done;
+        if (!task.done && nextDone) becameDone = true;
+        if (task.done && !nextDone) becameUndone = true;
+        return { ...task, done: nextDone, updatedAt: Date.now() };
+      })
+    );
+
+    if (!becameDone && !becameUndone) return;
+
+    setTaskEvents((prev) => {
+      const day = prev[todayKey] ?? { added: 0, completed: 0 };
+      const delta = becameDone ? 1 : -1;
+      return {
+        ...prev,
+        [todayKey]: { ...day, completed: Math.max(0, day.completed + delta) },
+      };
+    });
   }
 
   function addGoal() {

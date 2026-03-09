@@ -13,6 +13,8 @@ const dataFile = path.join(dataDir, "study-data.json");
 const defaultData = {
   goals: [],
   goalStats: {},
+  tasks: [],
+  taskEvents: {},
 };
 
 async function readStudyData() {
@@ -22,6 +24,8 @@ async function readStudyData() {
     return {
       goals: Array.isArray(parsed.goals) ? parsed.goals : [],
       goalStats: parsed.goalStats && typeof parsed.goalStats === "object" ? parsed.goalStats : {},
+      tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
+      taskEvents: parsed.taskEvents && typeof parsed.taskEvents === "object" ? parsed.taskEvents : {},
     };
   } catch {
     return defaultData;
@@ -94,6 +98,8 @@ const server = http.createServer(async (req, res) => {
       const payload = {
         goals: Array.isArray(body.goals) ? body.goals : [],
         goalStats: body.goalStats && typeof body.goalStats === "object" ? body.goalStats : {},
+        tasks: Array.isArray(body.tasks) ? body.tasks : [],
+        taskEvents: body.taskEvents && typeof body.taskEvents === "object" ? body.taskEvents : {},
       };
       await writeStudyData(payload);
       writeJson(res, 200, { ok: true });
