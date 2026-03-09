@@ -1,18 +1,14 @@
-import { Routes, Route, useNavigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import Landing from "./components/landing";
 import Dashboard from "./Dashboard";
-
-function DashboardPage() {
-  const navigate = useNavigate();
-
-  return <Dashboard onBackToLanding={() => navigate("/")} />;
-}
+import Analytics from "./Analytics";
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
-      <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/analytics" element={<Analytics />} />
     </Routes>
   );
 }

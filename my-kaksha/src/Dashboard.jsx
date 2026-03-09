@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+const GOALS_KEY = "mykaksha_goals_v1";
+const ANALYTICS_KEY = "mykaksha_goal_analytics_v1";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
@@ -11,11 +15,10 @@ const css = `
     grid-template-columns: 280px 1fr;
     background: radial-gradient(circle at top right, #f3e8da 0%, #faf8f3 42%);
     color: #5a4a3a;
+    font-family: 'Poppins', sans-serif;
   }
 
-  .d-shell.collapsed {
-    grid-template-columns: 94px 1fr;
-  }
+  .d-shell.collapsed { grid-template-columns: 94px 1fr; }
 
   .d-sidebar {
     background: linear-gradient(180deg, #fffdf9, #f5efe6);
@@ -29,20 +32,8 @@ const css = `
     top: 0;
   }
 
-  .d-brand-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .d-brand {
-    font-size: 1.2rem;
-    font-weight: 800;
-    color: #8b6f5e;
-    white-space: nowrap;
-  }
-
+  .d-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .d-brand { font-size: 1.2rem; font-weight: 800; color: #8b6f5e; white-space: nowrap; }
   .d-brand span { color: #c8b6a6; }
 
   .d-toggle {
@@ -56,11 +47,7 @@ const css = `
     font-weight: 700;
   }
 
-  .d-nav {
-    display: grid;
-    gap: 8px;
-  }
-
+  .d-nav { display: grid; gap: 8px; }
   .d-nav-btn {
     border: 1px solid transparent;
     background: transparent;
@@ -75,35 +62,18 @@ const css = `
     font-weight: 600;
     cursor: pointer;
   }
-
-  .d-nav-btn:hover {
-    background: #f5efe6;
-    border-color: #eed6c4;
-  }
-
+  .d-nav-btn:hover { background: #f5efe6; border-color: #eed6c4; }
   .d-nav-btn.active {
     background: linear-gradient(135deg, #eed6c4, #dac1ad);
     border-color: #c8b6a6;
     color: #4a3728;
   }
-
-  .d-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #c8b6a6;
-    flex-shrink: 0;
-  }
+  .d-dot { width: 8px; height: 8px; border-radius: 50%; background: #c8b6a6; flex-shrink: 0; }
 
   .d-shell.collapsed .d-brand,
   .d-shell.collapsed .d-label,
-  .d-shell.collapsed .d-note {
-    display: none;
-  }
-
-  .d-shell.collapsed .d-nav-btn {
-    justify-content: center;
-  }
+  .d-shell.collapsed .d-note { display: none; }
+  .d-shell.collapsed .d-nav-btn { justify-content: center; }
 
   .d-note {
     margin-top: auto;
@@ -116,30 +86,10 @@ const css = `
     line-height: 1.5;
   }
 
-  .d-main {
-    padding: 26px;
-  }
-
-  .d-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 18px;
-  }
-
-  .d-title {
-    margin: 0;
-    font-size: clamp(1.4rem, 2.2vw, 2rem);
-    color: #4a3728;
-  }
-
-  .d-sub {
-    margin: 5px 0 0;
-    color: #8b6f5e;
-    font-size: 0.9rem;
-  }
-
+  .d-main { padding: 26px; }
+  .d-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .d-title { margin: 0; font-size: clamp(1.4rem, 2.2vw, 2rem); color: #4a3728; }
+  .d-sub { margin: 5px 0 0; color: #8b6f5e; font-size: 0.9rem; }
   .d-day {
     border: 1px solid #eed6c4;
     background: #fffdf9;
@@ -150,13 +100,7 @@ const css = `
     font-weight: 600;
   }
 
-  .d-grid {
-    display: grid;
-    grid-template-columns: 1.4fr 1fr;
-    gap: 16px;
-    align-items: start;
-  }
-
+  .d-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start; }
   .d-card {
     background: #fffdf9;
     border: 1px solid #eed6c4;
@@ -164,19 +108,23 @@ const css = `
     padding: 20px;
     box-shadow: 0 10px 26px rgba(200, 182, 166, 0.2);
   }
+  .d-card-title { margin: 0 0 14px; color: #4a3728; font-weight: 700; }
 
-  .d-card-title {
-    margin: 0 0 14px;
-    color: #4a3728;
-    font-weight: 700;
+  .d-active-goal {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #eed6c4;
+    border-radius: 999px;
+    padding: 6px 10px;
+    background: #faf8f3;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #8b6f5e;
+    margin-bottom: 10px;
   }
 
-  .d-timer-wrap {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 14px;
-  }
-
+  .d-timer-wrap { display: grid; grid-template-columns: 1fr auto; gap: 14px; }
   .d-timer {
     border: 1px solid #eed6c4;
     border-radius: 18px;
@@ -184,7 +132,6 @@ const css = `
     padding: 18px;
     text-align: center;
   }
-
   .d-pill {
     border: 1px solid #eed6c4;
     border-radius: 999px;
@@ -195,21 +142,8 @@ const css = `
     padding: 5px 10px;
     display: inline-block;
   }
-
-  .d-time {
-    margin: 12px 0;
-    font-size: clamp(2.1rem, 5.2vw, 3.2rem);
-    color: #4a3728;
-    font-weight: 800;
-    letter-spacing: 1px;
-  }
-
-  .d-actions {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
+  .d-time { margin: 12px 0; font-size: clamp(2.1rem, 5.2vw, 3.2rem); color: #4a3728; font-weight: 800; letter-spacing: 1px; }
+  .d-actions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
 
   .d-btn {
     border: none;
@@ -220,17 +154,8 @@ const css = `
     cursor: pointer;
     font-size: 0.82rem;
   }
-
-  .d-btn.primary {
-    background: linear-gradient(135deg, #c8b6a6, #8b6f5e);
-    color: #fff;
-  }
-
-  .d-btn.soft {
-    border: 1px solid #eed6c4;
-    background: #f5efe6;
-    color: #8b6f5e;
-  }
+  .d-btn.primary { background: linear-gradient(135deg, #c8b6a6, #8b6f5e); color: #fff; }
+  .d-btn.soft { border: 1px solid #eed6c4; background: #f5efe6; color: #8b6f5e; }
 
   .d-settings {
     width: min(220px, 100%);
@@ -239,13 +164,7 @@ const css = `
     border-radius: 16px;
     padding: 12px;
   }
-
-  .d-settings h4 {
-    margin: 0 0 10px;
-    color: #5a4a3a;
-    font-size: 0.9rem;
-  }
-
+  .d-settings h4 { margin: 0 0 10px; color: #5a4a3a; font-size: 0.9rem; }
   .d-setting-row {
     display: grid;
     grid-template-columns: 1fr 64px;
@@ -253,13 +172,7 @@ const css = `
     align-items: center;
     margin-bottom: 7px;
   }
-
-  .d-setting-row label {
-    color: #8b6f5e;
-    font-size: 0.8rem;
-    font-weight: 600;
-  }
-
+  .d-setting-row label { color: #8b6f5e; font-size: 0.8rem; font-weight: 600; }
   .d-setting-row input {
     width: 100%;
     border: 1px solid #e5ceb9;
@@ -269,25 +182,15 @@ const css = `
     font-family: inherit;
     color: #5a4a3a;
   }
+  .d-skip { margin-top: 8px; display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #8b6f5e; font-weight: 600; }
 
-  .d-skip {
-    margin-top: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.8rem;
-    color: #8b6f5e;
-    font-weight: 600;
-  }
+  .d-task-add,
+  .d-goal-add { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 
-  .d-task-add {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 12px;
-  }
-
-  .d-task-add input {
+  .d-task-add input,
+  .d-goal-add input {
     flex: 1;
+    min-width: 220px;
     border: 1px solid #e5ceb9;
     border-radius: 12px;
     padding: 10px;
@@ -296,15 +199,13 @@ const css = `
     font-family: inherit;
   }
 
-  .d-task-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 8px;
-  }
+  .d-goal-add input[type="number"] { flex: 0 0 110px; min-width: 110px; }
 
-  .d-task {
+  .d-task-list,
+  .d-goal-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+
+  .d-task,
+  .d-goal-item {
     border: 1px solid #eed6c4;
     border-radius: 12px;
     background: #faf8f3;
@@ -312,28 +213,24 @@ const css = `
     display: flex;
     align-items: center;
     gap: 8px;
+    justify-content: space-between;
   }
 
   .d-task span { font-size: 0.9rem; }
+  .d-task.done span { text-decoration: line-through; color: #b09f8f; }
 
-  .d-task.done span {
-    text-decoration: line-through;
-    color: #b09f8f;
-  }
+  .d-goal-main { display: grid; gap: 4px; }
+  .d-goal-title { font-weight: 700; color: #4a3728; }
+  .d-goal-meta { color: #8b6f5e; font-size: 0.8rem; }
+  .d-goal-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
-  .d-tracker-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-  }
-
+  .d-tracker-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .d-tracker-item {
     border: 1px solid #eed6c4;
     border-radius: 16px;
     background: #faf8f3;
     padding: 10px;
   }
-
   .d-tracker-preview {
     border-radius: 12px;
     min-height: 120px;
@@ -346,27 +243,14 @@ const css = `
     margin-bottom: 10px;
     border: 1px solid rgba(90, 74, 58, 0.12);
   }
-
   .d-tracker-box {
     border: 1px solid #eed6c4;
     border-radius: 14px;
     background: #f5efe6;
     padding: 12px;
   }
-
-  .d-tracker-box p {
-    margin: 0 0 6px;
-    color: #5a4a3a;
-    font-size: 0.9rem;
-  }
-
-  .d-tracker-box ul {
-    margin: 0;
-    padding-left: 18px;
-    color: #8b6f5e;
-    font-size: 0.85rem;
-    line-height: 1.6;
-  }
+  .d-tracker-box p { margin: 0 0 6px; color: #5a4a3a; font-size: 0.9rem; }
+  .d-tracker-box ul { margin: 0; padding-left: 18px; color: #8b6f5e; font-size: 0.85rem; line-height: 1.6; }
 
   @media (max-width: 980px) {
     .d-grid { grid-template-columns: 1fr; }
@@ -376,25 +260,19 @@ const css = `
   }
 
   @media (max-width: 780px) {
-    .d-shell,
-    .d-shell.collapsed { grid-template-columns: 1fr; }
-
+    .d-shell, .d-shell.collapsed { grid-template-columns: 1fr; }
     .d-sidebar {
       min-height: auto;
       position: static;
       border-right: none;
       border-bottom: 1px solid #eed6c4;
     }
-
     .d-shell.collapsed .d-brand,
     .d-shell.collapsed .d-label,
     .d-shell.collapsed .d-note { display: inline; }
-
     .d-shell.collapsed .d-nav-btn { justify-content: flex-start; }
   }
 `;
-
-const navItems = ["Home", "About", "Settings", "Study Group"];
 
 const trackerData = {
   Projects: [
@@ -426,9 +304,24 @@ function formatTime(totalSeconds) {
   return `${minutes}:${seconds}`;
 }
 
-export default function Dashboard({ onBackToLanding }) {
+function readJson(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+export default function Dashboard() {
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
-  const [activeNav, setActiveNav] = useState("Home");
+  const [activeNav, setActiveNav] = useState("Dashboard");
 
   const [focusMinutes, setFocusMinutes] = useState(25);
   const [breakMinutes, setBreakMinutes] = useState(5);
@@ -443,6 +336,17 @@ export default function Dashboard({ onBackToLanding }) {
   ]);
   const [taskText, setTaskText] = useState("");
 
+  const [goals, setGoals] = useState(() => readJson(GOALS_KEY, []));
+  const [goalStats, setGoalStats] = useState(() => readJson(ANALYTICS_KEY, {}));
+  const [goalTitle, setGoalTitle] = useState("");
+  const [goalMinutes, setGoalMinutes] = useState(25);
+  const [activeGoalId, setActiveGoalId] = useState(null);
+
+  const activeGoal = useMemo(
+    () => goals.find((goal) => goal.id === activeGoalId) ?? null,
+    [goals, activeGoalId]
+  );
+
   const todayLabel = useMemo(
     () =>
       new Date().toLocaleDateString("en-IN", {
@@ -454,16 +358,76 @@ export default function Dashboard({ onBackToLanding }) {
   );
 
   useEffect(() => {
+    writeJson(GOALS_KEY, goals);
+  }, [goals]);
+
+  useEffect(() => {
+    writeJson(ANALYTICS_KEY, goalStats);
+  }, [goalStats]);
+
+  useEffect(() => {
     setSecondsLeft((mode === "focus" ? focusMinutes : breakMinutes) * 60);
     setRunning(false);
   }, [focusMinutes, breakMinutes, mode]);
+
+  function addGoalStatsSecond(goal) {
+    setGoalStats((prev) => {
+      const previous = prev[goal.id] ?? {
+        id: goal.id,
+        title: goal.title,
+        targetMinutes: goal.minutes,
+        sessions: 0,
+        totalSeconds: 0,
+      };
+      return {
+        ...prev,
+        [goal.id]: {
+          ...previous,
+          title: goal.title,
+          targetMinutes: goal.minutes,
+          totalSeconds: previous.totalSeconds + 1,
+        },
+      };
+    });
+  }
+
+  function markCompletedSession(goal) {
+    setGoalStats((prev) => {
+      const previous = prev[goal.id] ?? {
+        id: goal.id,
+        title: goal.title,
+        targetMinutes: goal.minutes,
+        sessions: 0,
+        totalSeconds: 0,
+      };
+      return {
+        ...prev,
+        [goal.id]: {
+          ...previous,
+          title: goal.title,
+          targetMinutes: goal.minutes,
+          sessions: previous.sessions + 1,
+        },
+      };
+    });
+  }
 
   useEffect(() => {
     if (!running) return;
 
     const timerId = setInterval(() => {
       setSecondsLeft((current) => {
-        if (current > 1) return current - 1;
+        const shouldRecord = mode === "focus" && activeGoal;
+
+        if (current > 1) {
+          if (shouldRecord) addGoalStatsSecond(activeGoal);
+          return current - 1;
+        }
+
+        if (shouldRecord) {
+          addGoalStatsSecond(activeGoal);
+          markCompletedSession(activeGoal);
+        }
 
         const nextMode = mode === "focus" ? "break" : "focus";
         if (nextMode === "break" && skipBreaks) {
@@ -477,7 +441,7 @@ export default function Dashboard({ onBackToLanding }) {
     }, 1000);
 
     return () => clearInterval(timerId);
-  }, [running, mode, skipBreaks, focusMinutes, breakMinutes]);
+  }, [running, mode, skipBreaks, focusMinutes, breakMinutes, activeGoal]);
 
   function resetTimer() {
     setRunning(false);
@@ -487,13 +451,40 @@ export default function Dashboard({ onBackToLanding }) {
   function addTask() {
     const value = taskText.trim();
     if (!value) return;
-
     setTasks((prev) => [{ id: Date.now(), text: value, done: false }, ...prev]);
     setTaskText("");
   }
 
   function toggleTask(id) {
     setTasks((prev) => prev.map((task) => (task.id === id ? { ...task, done: !task.done } : task)));
+  }
+
+  function addGoal() {
+    const cleanTitle = goalTitle.trim();
+    if (!cleanTitle) return;
+
+    const goal = {
+      id: Date.now(),
+      title: cleanTitle,
+      minutes: Math.max(1, Number(goalMinutes) || 1),
+    };
+
+    setGoals((prev) => [goal, ...prev]);
+    setGoalTitle("");
+    setGoalMinutes(25);
+  }
+
+  function useGoalInTimer(goal) {
+    setActiveGoalId(goal.id);
+    setFocusMinutes(goal.minutes);
+    setMode("focus");
+    setSecondsLeft(goal.minutes * 60);
+    setRunning(false);
+  }
+
+  function navTo(label, path) {
+    setActiveNav(label);
+    navigate(path);
   }
 
   return (
@@ -510,25 +501,22 @@ export default function Dashboard({ onBackToLanding }) {
           </div>
 
           <nav className="d-nav" aria-label="Dashboard Navigation">
-            {navItems.map((item) => (
-              <button
-                key={item}
-                className={`d-nav-btn ${activeNav === item ? "active" : ""}`}
-                onClick={() => {
-                  setActiveNav(item);
-                  if (item === "Home") onBackToLanding?.();
-                }}
-              >
-                <span className="d-dot" aria-hidden="true" />
-                <span className="d-label">{item}</span>
-              </button>
-            ))}
+            <button className={`d-nav-btn ${activeNav === "Dashboard" ? "active" : ""}`} onClick={() => setActiveNav("Dashboard")}>
+              <span className="d-dot" aria-hidden="true" />
+              <span className="d-label">Dashboard</span>
+            </button>
+            <button className={`d-nav-btn ${activeNav === "Analytics" ? "active" : ""}`} onClick={() => navTo("Analytics", "/analytics")}>
+              <span className="d-dot" aria-hidden="true" />
+              <span className="d-label">Analytics</span>
+            </button>
+            <button className="d-nav-btn" onClick={() => navigate("/")}>
+              <span className="d-dot" aria-hidden="true" />
+              <span className="d-label">Landing</span>
+            </button>
           </nav>
 
-          <button className="d-btn soft" onClick={onBackToLanding}>Back to Landing</button>
-
           <div className="d-note">
-            Keep your day light and intentional. One focused block at a time.
+            Set a goal, load it into the timer, and your goal study sessions will auto-record for analytics.
           </div>
         </aside>
 
@@ -536,7 +524,7 @@ export default function Dashboard({ onBackToLanding }) {
           <div className="d-head">
             <div>
               <h1 className="d-title">Dashboard</h1>
-              <p className="d-sub">Your calm study control center.</p>
+              <p className="d-sub">Goal-based study sessions with Pomodoro tracking.</p>
             </div>
             <div className="d-day">{todayLabel}</div>
           </div>
@@ -544,6 +532,13 @@ export default function Dashboard({ onBackToLanding }) {
           <div className="d-grid">
             <section className="d-card">
               <h2 className="d-card-title">Cutesy Focus Timer</h2>
+
+              {activeGoal ? (
+                <div className="d-active-goal">
+                  Active Goal: {activeGoal.title} ({activeGoal.minutes} min)
+                </div>
+              ) : null}
+
               <div className="d-timer-wrap">
                 <div className="d-timer">
                   <span className="d-pill">{mode === "focus" ? "Focus Time" : "Break Time"}</span>
@@ -636,6 +631,57 @@ export default function Dashboard({ onBackToLanding }) {
                     <span>{task.text}</span>
                   </li>
                 ))}
+              </ul>
+            </section>
+
+            <section className="d-card" style={{ gridColumn: "1 / -1" }}>
+              <h2 className="d-card-title">Goals</h2>
+              <div className="d-goal-add">
+                <input
+                  type="text"
+                  value={goalTitle}
+                  placeholder="Goal title (ex: Physics revision)"
+                  onChange={(e) => setGoalTitle(e.target.value)}
+                />
+                <input
+                  type="number"
+                  min="1"
+                  max="180"
+                  value={goalMinutes}
+                  onChange={(e) => setGoalMinutes(Math.max(1, Number(e.target.value) || 1))}
+                />
+                <button className="d-btn primary" onClick={addGoal}>Add Goal</button>
+              </div>
+
+              <ul className="d-goal-list">
+                {goals.length === 0 ? (
+                  <li className="d-goal-item">
+                    <div className="d-goal-main">
+                      <div className="d-goal-title">No goals yet</div>
+                      <div className="d-goal-meta">Create a goal and set its focus duration to sync with Pomodoro.</div>
+                    </div>
+                  </li>
+                ) : (
+                  goals.map((goal) => {
+                    const stats = goalStats[goal.id];
+                    const studiedMins = Math.floor((stats?.totalSeconds ?? 0) / 60);
+                    const sessions = stats?.sessions ?? 0;
+                    return (
+                      <li key={goal.id} className="d-goal-item">
+                        <div className="d-goal-main">
+                          <div className="d-goal-title">{goal.title}</div>
+                          <div className="d-goal-meta">
+                            Target: {goal.minutes} min • Studied: {studiedMins} min • Sessions: {sessions}
+                          </div>
+                        </div>
+                        <div className="d-goal-actions">
+                          <button className="d-btn soft" onClick={() => useGoalInTimer(goal)}>Use in Timer</button>
+                          {goal.id === activeGoalId ? <span className="d-pill">Active</span> : null}
+                        </div>
+                      </li>
+                    );
+                  })
+                )}
               </ul>
             </section>
 
