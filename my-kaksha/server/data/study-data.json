@@ -1,0 +1,18 @@
+{
+  "goals": [
+    {
+      "id": 1773073371865,
+      "title": "Cyber",
+      "minutes": 20
+    }
+  ],
+  "goalStats": {
+    "1773073371865": {
+      "id": 1773073371865,
+      "title": "Cyber",
+      "targetMinutes": 20,
+      "sessions": 0,
+      "totalSeconds": 129
+    }
+  }
+}
