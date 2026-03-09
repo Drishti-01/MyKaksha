@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-const GOALS_KEY = "mykaksha_goals_v1";
-const ANALYTICS_KEY = "mykaksha_goal_analytics_v1";
+import { fetchStudyData, saveStudyData } from "./api/studyData";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
@@ -304,20 +302,6 @@ function formatTime(totalSeconds) {
   return `${minutes}:${seconds}`;
 }
 
-function readJson(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJson(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
 export default function Dashboard() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
@@ -336,8 +320,9 @@ export default function Dashboard() {
   ]);
   const [taskText, setTaskText] = useState("");
 
-  const [goals, setGoals] = useState(() => readJson(GOALS_KEY, []));
-  const [goalStats, setGoalStats] = useState(() => readJson(ANALYTICS_KEY, {}));
+  const [goals, setGoals] = useState([]);
+  const [goalStats, setGoalStats] = useState({});
+  const [dataReady, setDataReady] = useState(false);
   const [goalTitle, setGoalTitle] = useState("");
   const [goalMinutes, setGoalMinutes] = useState(25);
   const [activeGoalId, setActiveGoalId] = useState(null);
@@ -358,12 +343,33 @@ export default function Dashboard() {
   );
 
   useEffect(() => {
-    writeJson(GOALS_KEY, goals);
-  }, [goals]);
+    let mounted = true;
+
+    async function loadData() {
+      try {
+        const data = await fetchStudyData();
+        if (!mounted) return;
+        setGoals(data.goals);
+        setGoalStats(data.goalStats);
+      } catch {
+        if (!mounted) return;
+        setGoals([]);
+        setGoalStats({});
+      } finally {
+        if (mounted) setDataReady(true);
+      }
+    }
+
+    loadData();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
-    writeJson(ANALYTICS_KEY, goalStats);
-  }, [goalStats]);
+    if (!dataReady) return;
+    saveStudyData({ goals, goalStats }).catch(() => {});
+  }, [goals, goalStats, dataReady]);
 
   useEffect(() => {
     setSecondsLeft((mode === "focus" ? focusMinutes : breakMinutes) * 60);

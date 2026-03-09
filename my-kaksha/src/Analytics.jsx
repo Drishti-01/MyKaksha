@@ -1,7 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-const ANALYTICS_KEY = "mykaksha_goal_analytics_v1";
+import { fetchStudyData } from "./api/studyData";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
@@ -139,21 +138,34 @@ function formatDuration(totalSeconds) {
   return `${hours}h ${mins}m`;
 }
 
-function readAnalytics() {
-  try {
-    const raw = localStorage.getItem(ANALYTICS_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw);
-  } catch {
-    return {};
-  }
-}
-
 export default function Analytics() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+  const [statsMap, setStatsMap] = useState({});
+  const [loading, setLoading] = useState(true);
 
-  const statsMap = useMemo(() => readAnalytics(), []);
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadData() {
+      try {
+        const data = await fetchStudyData();
+        if (!mounted) return;
+        setStatsMap(data.goalStats);
+      } catch {
+        if (!mounted) return;
+        setStatsMap({});
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    loadData();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const rows = useMemo(() => Object.values(statsMap), [statsMap]);
 
   const totalGoals = rows.length;
@@ -213,7 +225,9 @@ export default function Analytics() {
           </div>
 
           <section className="a-table-card">
-            {rows.length === 0 ? (
+            {loading ? (
+              <p className="a-empty">Loading analytics...</p>
+            ) : rows.length === 0 ? (
               <p className="a-empty">No analytics yet. Create a goal in Dashboard and start the timer to record sessions.</p>
             ) : (
               <table className="a-table">
