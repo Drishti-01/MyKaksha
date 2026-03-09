@@ -426,7 +426,7 @@ function formatTime(totalSeconds) {
   return `${minutes}:${seconds}`;
 }
 
-export default function Dashboard({ onBackToLanding }) {
+export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
   const [collapsed, setCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("Home");
 
@@ -516,7 +516,13 @@ export default function Dashboard({ onBackToLanding }) {
                 className={`d-nav-btn ${activeNav === item ? "active" : ""}`}
                 onClick={() => {
                   setActiveNav(item);
-                  if (item === "Home") onBackToLanding?.();
+                  if (item === "Home") {
+                    onBackToLanding?.();
+                    return;
+                  }
+                  if (item === "Study Group") {
+                    onGoToStudyGroup?.();
+                  }
                 }}
               >
                 <span className="d-dot" aria-hidden="true" />
