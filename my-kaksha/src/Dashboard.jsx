@@ -858,7 +858,7 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
 
           <div className="d-grid">
             <section className="d-card">
-              <h2 className="d-card-title">Cutesy Focus Timer</h2>
+              <h2 className="d-card-title">Focus Timer</h2>
 
               {activeGoal ? (
                 <div className="d-active-goal">
