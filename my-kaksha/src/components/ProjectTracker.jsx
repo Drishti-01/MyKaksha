@@ -8,6 +8,8 @@ import {
   replaceProject,
 } from "../api/projects";
 import { useAuth } from "../auth/useAuth";
+import AppSidebar from "./AppSidebar";
+import useSidebarState from "./useSidebarState";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
@@ -15,30 +17,17 @@ const css = `
   html { scroll-behavior:smooth; }
   body { font-family:'Poppins',sans-serif; background:#FAF8F3; color:#5a4a3a; overflow-x:hidden; }
 
-  .pt-nav {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-    background: rgba(250,248,243,0.92); backdrop-filter: blur(14px);
-    padding: 14px 48px; display: flex; align-items: center; justify-content: space-between;
-    border-bottom: 1px solid #EED6C430; font-family: 'Poppins', sans-serif;
+  .pt-shell {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    background: #FAF8F3;
   }
-  .pt-nav-logo { font-size: 1.3rem; font-weight: 800; color: #8B6F5E; }
-  .pt-nav-logo span { color: #C8B6A6; }
-  .pt-nav-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .pt-user-chip {
-    background:#fffdf9; border:1px solid #EED6C4; color:#8B6F5E;
-    padding:9px 14px; border-radius:50px; font-size:0.82rem; font-weight:600;
-  }
-  .pt-back-btn {
-    display: flex; align-items: center; gap: 8px;
-    background: #F5EFE6; color: #8B6F5E; border: 1.5px solid #EED6C4;
-    padding: 9px 20px; border-radius: 50px; font-family: 'Poppins', sans-serif;
-    font-weight: 600; font-size: 0.83rem; cursor: pointer;
-    transition: all 0.25s cubic-bezier(.34,1.56,.64,1);
-  }
-  .pt-back-btn:hover { background: #EED6C4; transform: translateY(-2px) scale(1.03); }
+  .pt-shell.collapsed { grid-template-columns: 94px 1fr; }
+  .pt-main { min-width: 0; }
 
   .pt-page {
-    min-height: 100vh; padding: 96px 48px 80px;
+    min-height: 100vh; padding: 32px 48px 80px;
     background: #FAF8F3; font-family: 'Poppins', sans-serif;
     position: relative; overflow-x: hidden;
   }
@@ -203,8 +192,8 @@ const css = `
   .pt-empty-desc { font-size: 0.88rem; color: #C8B6A6; }
 
   @media (max-width: 900px) {
+    .pt-shell, .pt-shell.collapsed { grid-template-columns: 1fr; }
     .pt-page { padding: 80px 24px 60px; }
-    .pt-nav { padding: 14px 24px; }
     .pt-title { font-size: 2.2rem; }
     .pt-grid { grid-template-columns: 1fr 1fr; }
     .pt-form-grid { grid-template-columns: 1fr; }
@@ -214,7 +203,6 @@ const css = `
     .pt-grid { grid-template-columns: 1fr; }
     .pt-stats { flex-direction: column; gap: 16px; }
     .pt-sdiv { width: 60px; height: 1px; }
-    .pt-nav-actions { justify-content:flex-end; }
   }
 `;
 
@@ -276,6 +264,7 @@ function formatTechnologies(project) {
 export default function ProjectTracker() {
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
+  const [collapsed, setCollapsed] = useSidebarState();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [requestError, setRequestError] = useState("");
@@ -290,6 +279,7 @@ export default function ProjectTracker() {
     completed: projects.filter((project) => project.status === "Completed").length,
     inProgress: projects.filter((project) => project.status === "In Progress").length,
   };
+  const navItems = ["Dashboard", "Analytics", "Projects", "Study Group"];
 
   useEffect(() => {
     let mounted = true;
@@ -406,31 +396,43 @@ export default function ProjectTracker() {
   return (
     <>
       <style>{css}</style>
-
-      <nav className="pt-nav">
-        <div className="pt-nav-logo">My Kaksha <span>*</span></div>
-        <div className="pt-nav-actions">
-          <span className="pt-user-chip">{user?.name || "Student"}</span>
-          <button className="pt-back-btn" onClick={() => navigate("/dashboard")}>
-            Back to Dashboard
-          </button>
-          <button
-            className="pt-back-btn"
-            onClick={async () => {
+      <div className={`pt-shell ${collapsed ? "collapsed" : ""}`}>
+        <AppSidebar
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((prev) => !prev)}
+          navItems={navItems}
+          activeItem="Projects"
+          onNavigate={(item) => {
+            if (item === "Projects") return;
+            if (item === "Dashboard") {
+              navigate("/dashboard");
+              return;
+            }
+            if (item === "Analytics") {
+              navigate("/analytics");
+              return;
+            }
+            if (item === "Study Group") {
+              navigate("/study-group");
+            }
+          }}
+          primaryAction={{ label: "Back to Home", onClick: () => navigate("/") }}
+          secondaryAction={{
+            label: "Sign Out",
+            onClick: async () => {
               await signOut();
               navigate("/login", { replace: true });
-            }}
-          >
-            Sign Out
-          </button>
-        </div>
-      </nav>
-
-      <div className="pt-blob pt-b1" />
-      <div className="pt-blob pt-b2" />
-
-      <div className="pt-page">
-        {requestError ? <div className="pt-banner">{requestError}</div> : null}
+            },
+          }}
+          noteTitle={`Signed in as ${user?.name || "Student"}`}
+          noteText="Track milestones, update project status, and keep your portfolio organized."
+          navAriaLabel="Projects navigation"
+        />
+        <main className="pt-main">
+          <div className="pt-blob pt-b1" />
+          <div className="pt-blob pt-b2" />
+          <div className="pt-page">
+            {requestError ? <div className="pt-banner">{requestError}</div> : null}
 
         <div className="pt-header">
           <FadeIn>
@@ -632,6 +634,8 @@ export default function ProjectTracker() {
             </div>
           </div>
         ) : null}
+          </div>
+        </main>
       </div>
     </>
   );

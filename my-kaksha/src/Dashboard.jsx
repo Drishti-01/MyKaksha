@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchStudyData, saveStudyData } from "./api/studyData";
+import AppSidebar from "./components/AppSidebar";
+import timerBg from "./components/download (13).jpg";
+import taskBg from "./components/taskbg.jpg";
+import goalsBg from "./components/Stripe.jpg";
+import useSidebarState from "./components/useSidebarState";
 
 const PROJECTS_STORAGE_KEY = "mykaksha_projects";
 const FOCUS_STATS_STORAGE_KEY = "mykaksha_focus_stats";
@@ -125,6 +130,10 @@ const css = `
   .d-card-title { margin: 0 0 14px; color: #4a3728; font-weight: 700; }
 
   .d-task-card {
+   background-image: url("${taskBg}");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -137,6 +146,7 @@ const css = `
   }
 
   .d-task-scroll {
+  
     flex: 1;
     min-height: 0;
     max-height: 260px;
@@ -185,12 +195,16 @@ const css = `
   .d-timer {
     border: 1px solid #eed6c4;
     border-radius: 18px;
-    background: linear-gradient(145deg, #f5efe6, #faf8f3);
+    background-color: #e6f5e7;
+    background-image: url("${timerBg}");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     padding: 18px;
     text-align: center;
   }
   .d-pill {
-    border: 1px solid #eed6c4;
+    border: 1px solid #733c11;
     border-radius: 999px;
     background: #fffdf9;
     color: #8b6f5e;
@@ -522,7 +536,7 @@ const trackerPreviewThemes = {
   },
 };
 
-const navItems = ["Dashboard", "Analytics", "Study Group"];
+const navItems = ["Dashboard", "Analytics", "Projects", "Study Group"];
 
 function formatTime(totalSeconds) {
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
@@ -604,7 +618,7 @@ function loadProjectsSnapshot() {
 }
 
 export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStudyGroup, onGoToProjects }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarState();
   const [activeNav, setActiveNav] = useState("Dashboard");
 
   const [focusMinutes, setFocusMinutes] = useState(25);
@@ -898,45 +912,30 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
       <style dangerouslySetInnerHTML={{ __html: css }} />
 
       <div className={`d-shell ${collapsed ? "collapsed" : ""}`}>
-        <aside className="d-sidebar">
-          <div className="d-brand-row">
-            <div className="d-brand">My <span>Kaksha</span></div>
-            <button className="d-toggle" onClick={() => setCollapsed((s) => !s)} aria-label="Toggle Sidebar">
-              {collapsed ? ">" : "<"}
-            </button>
-          </div>
-
-          <nav className="d-nav" aria-label="Dashboard Navigation">
-            {navItems.map((item) => (
-              <button
-                key={item}
-                className={`d-nav-btn ${activeNav === item ? "active" : ""}`}
-                onClick={() => {
-                  setActiveNav(item);
-                  if (item === "Dashboard") return;
-                  if (item === "Analytics") {
-                    onGoToAnalytics?.();
-                    return;
-                  }
-                  if (item === "Study Group") {
-                    onGoToStudyGroup?.();
-                  }
-                }}
-              >
-                <span className="d-dot" aria-hidden="true" />
-                <span className="d-label">{item}</span>
-              </button>
-            ))}
-          </nav>
-
-          <button type="button" className="d-back-btn" onClick={() => onBackToLanding?.()}>
-            Back to Home
-          </button>
-
-          <div className="d-note">
-            Set a goal, load it into the timer, and your goal study sessions will auto-record for analytics.
-          </div>
-        </aside>
+        <AppSidebar
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((s) => !s)}
+          navItems={navItems}
+          activeItem={activeNav}
+          onNavigate={(item) => {
+            setActiveNav(item);
+            if (item === "Dashboard") return;
+            if (item === "Analytics") {
+              onGoToAnalytics?.();
+              return;
+            }
+            if (item === "Projects") {
+              onGoToProjects?.();
+              return;
+            }
+            if (item === "Study Group") {
+              onGoToStudyGroup?.();
+            }
+          }}
+          primaryAction={{ label: "Back to Home", onClick: () => onBackToLanding?.() }}
+          noteText="Set a goal, load it into the timer, and your study sessions auto-record for analytics."
+          navAriaLabel="Dashboard navigation"
+        />
 
         <main className="d-main">
           <div className="d-head">
@@ -949,7 +948,7 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
 
           <div className="d-grid">
             <section className="d-card">
-              <h2 className="d-card-title">Cutesy Focus Timer</h2>
+              <h2 className="d-card-title">Focus Timer</h2>
 
               {activeGoal ? (
                 <div className="d-active-goal-row">
@@ -967,7 +966,7 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
               ) : null}
 
               <div className="d-timer-wrap">
-                <div className="d-timer">
+                <div className="d-timer" style={{ backgroundImage: `url(${timerBg})` }}>
                   <span className="d-pill">{mode === "focus" ? "Focus Time" : "Break Time"}</span>
                   <div className="d-time">{formatTime(secondsLeft)}</div>
                   <div className="d-actions">
@@ -1088,7 +1087,10 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
               </div>
             </section>
 
-            <section className="d-card" style={{ gridColumn: "1 / -1" }}>
+            <section
+              className="d-card goals-card"
+              style={{ gridColumn: "1 / -1", backgroundImage: `url(${goalsBg})`, backgroundSize: "cover", backgroundPosition: "center" }}
+            >
               <h2 className="d-card-title">Goals</h2>
               <div className="d-goal-add">
                 <input
