@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { io } from "socket.io-client";
 
 
 const css = `
@@ -403,6 +404,19 @@ const css = `
     color: #6b4d3a;
   }
 
+  .sg-message-time {
+    display: block;
+    margin-top: 4px;
+    color: #8c7766;
+    font-size: 0.76rem;
+  }
+
+  .sg-typing {
+    color: #8c7766;
+    font-size: 0.82rem;
+    font-style: italic;
+  }
+
   .chat-input {
     display: flex;
     gap: 10px;
@@ -459,10 +473,7 @@ const members = [
   { name: "Kabir", goal: 8, completed: 4 },
 ];
 
-const chatSeeds = [
-  { id: 1, author: "Ananya", text: "Let's finish recursion today." },
-  { id: 2, author: "Rahul", text: "Starting a pomodoro session now." },
-];
+const CHAT_ROOM_ID = "study-room-1";
 
 function formatTime(totalSeconds) {
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
@@ -668,37 +679,118 @@ function CollaborativeNotes() {
 }
 
 function GroupChat() {
-  const [messages, setMessages] = useState(chatSeeds);
+  const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
+  const [typingUser, setTypingUser] = useState("");
+  const chatBoxRef = useRef(null);
+  const socketRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const currentUserName = useMemo(() => {
+    const fromStorage = localStorage.getItem("myKakshaUserName");
+    if (fromStorage && fromStorage.trim() && !fromStorage.includes("@")) return fromStorage.trim();
+    return "Guest";
+  }, []);
+
+  useEffect(() => {
+    const socket = io("http://localhost:4000");
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      socket.emit("join-room", { roomId: CHAT_ROOM_ID, username: currentUserName });
+    });
+
+    socket.on("receive-message", (incomingMessage) => {
+      setMessages((prev) => [...prev, incomingMessage]);
+    });
+
+    socket.on("user-joined", (notice) => {
+      setMessages((prev) => [
+        ...prev,
+        { id: `join-${Date.now()}`, username: "System", text: notice.text, timestamp: notice.timestamp },
+      ]);
+    });
+
+    socket.on("user-left", (notice) => {
+      setMessages((prev) => [
+        ...prev,
+        { id: `left-${Date.now()}`, username: "System", text: notice.text, timestamp: notice.timestamp },
+      ]);
+    });
+
+    socket.on("typing", ({ username }) => {
+      setTypingUser(username || "");
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => setTypingUser(""), 1200);
+    });
+
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      socket.disconnect();
+    };
+  }, [currentUserName]);
+
+  useEffect(() => {
+    if (!chatBoxRef.current) return;
+    chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
+  }, [messages, typingUser]);
 
   function sendMessage(e) {
     e.preventDefault();
     const value = text.trim();
     if (!value) return;
-    setMessages((prev) => [...prev, { id: Date.now(), author: "You", text: value }]);
+    socketRef.current?.emit("send-message", {
+      roomId: CHAT_ROOM_ID,
+      username: currentUserName,
+      text: value,
+    });
     setText("");
+  }
+
+  function handleInputChange(e) {
+    const nextValue = e.target.value;
+    setText(nextValue);
+    if (!nextValue.trim()) return;
+    socketRef.current?.emit("typing", {
+      roomId: CHAT_ROOM_ID,
+      username: currentUserName,
+    });
+  }
+
+  function formatTimestamp(value) {
+    if (!value) return "";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return parsed.toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   }
 
   return (
     <article className="sg-card" aria-labelledby="chat">
       <h2 id="chat">Group Chat</h2>
-      <div className="sg-chat-box" aria-live="polite">
+      <div className="sg-chat-box" aria-live="polite" id="chat-messages" ref={chatBoxRef}>
         {messages.map((msg) => (
           <div key={msg.id} className="sg-message">
-            <strong>{msg.author}</strong>
+            <strong>{msg.username}</strong>
             <span>{msg.text}</span>
+            {msg.timestamp ? <small className="sg-message-time">{formatTimestamp(msg.timestamp)}</small> : null}
           </div>
         ))}
+        {typingUser && typingUser !== currentUserName ? (
+          <div className="sg-typing" id="typing-indicator">{typingUser} is typing...</div>
+        ) : null}
       </div>
       <form className="chat-input" onSubmit={sendMessage}>
         <input
+          id="chat-input"
           type="text"
           value={text}
           placeholder="Send a quick update"
-          onChange={(e) => setText(e.target.value)}
+          onChange={handleInputChange}
           aria-label="Type a message"
         />
-        <button className="sg-btn" type="submit">Send</button>
+        <button className="sg-btn" id="send-btn" type="submit">Send</button>
       </form>
     </article>
   );

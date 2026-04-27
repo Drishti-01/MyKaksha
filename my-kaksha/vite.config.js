@@ -9,6 +9,10 @@ export default defineConfig({
       "/api": "http://localhost:4000",
       "/signup": "http://localhost:4000",
       "/login": "http://localhost:4000",
+      "/socket.io": {
+        target: "http://localhost:4000",
+        ws: true,
+      },
     },
   },
 })

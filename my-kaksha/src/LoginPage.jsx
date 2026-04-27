@@ -163,7 +163,9 @@ export default function LoginPage() {
         throw new Error(data?.error || "Unable to login");
       }
 
+      const savedName = typeof data?.user?.name === "string" ? data.user.name.trim() : "";
       localStorage.setItem("user", form.email.trim().toLowerCase());
+      localStorage.setItem("myKakshaUserName", savedName || "Guest");
       navigate("/dashboard");
     } catch (error) {
       setState({ loading: false, message: error.message || "Login failed" });
