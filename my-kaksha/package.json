@@ -11,15 +11,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-<<<<<<< HEAD
+
     "cors": "^2.8.6",
     "express": "^5.2.1",
-=======
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.6.1",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.18.0",
->>>>>>> 6c2e25d335b4e6c3415eb972c70e09fd5eb59ce1
+
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
