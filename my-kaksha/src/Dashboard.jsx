@@ -1,5 +1,8 @@
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fetchStudyData, saveStudyData } from "./api/studyData";
+
+const PROJECTS_STORAGE_KEY = "mykaksha_projects";
+const FOCUS_STATS_STORAGE_KEY = "mykaksha_focus_stats";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
@@ -69,7 +72,8 @@ const css = `
 
   .d-shell.collapsed .d-brand,
   .d-shell.collapsed .d-label,
-  .d-shell.collapsed .d-note { display: none; }
+  .d-shell.collapsed .d-note,
+  .d-shell.collapsed .d-back-btn { display: none; }
   .d-shell.collapsed .d-nav-btn { justify-content: center; }
 
   .d-note {
@@ -82,6 +86,19 @@ const css = `
     font-size: 0.76rem;
     line-height: 1.5;
   }
+
+  .d-back-btn {
+    width: 100%;
+    border-radius: 999px;
+    border: 1px solid #eed6c4;
+    background: #f5efe6;
+    color: #8b6f5e;
+    font-family: inherit;
+    font-weight: 600;
+    padding: 10px 14px;
+    cursor: pointer;
+  }
+  .d-back-btn:hover { background: #fffdf9; }
 
   .d-main { padding: 26px; }
   .d-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
@@ -97,7 +114,7 @@ const css = `
     font-weight: 600;
   }
 
-  .d-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start; }
+  .d-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: stretch; }
   .d-card {
     background: #fffdf9;
     border: 1px solid #eed6c4;
@@ -107,10 +124,38 @@ const css = `
   }
   .d-card-title { margin: 0 0 14px; color: #4a3728; font-weight: 700; }
 
+  .d-task-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .d-task-card-top {
+    flex-shrink: 0;
+  }
+
+  .d-task-scroll {
+    flex: 1;
+    min-height: 0;
+    max-height: 260px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    padding-right: 6px;
+  }
+
+  .d-active-goal-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
   .d-active-goal {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
     border: 1px solid #eed6c4;
     border-radius: 999px;
     padding: 6px 10px;
@@ -118,7 +163,22 @@ const css = `
     font-size: 0.78rem;
     font-weight: 600;
     color: #8b6f5e;
-    margin-bottom: 10px;
+  }
+
+  .d-active-goal-clear {
+    border: 1px solid #eed6c4;
+    border-radius: 999px;
+    background: #fffdf9;
+    color: #8b6f5e;
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 6px 12px;
+  }
+  .d-active-goal-clear:hover {
+    color: #4a3728;
+    background: #f5efe6;
   }
 
   .d-timer-wrap { display: grid; grid-template-columns: 1fr auto; gap: 14px; }
@@ -181,6 +241,55 @@ const css = `
   }
   .d-skip { margin-top: 8px; display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #8b6f5e; font-weight: 600; }
 
+  .d-productivity-strip {
+    margin-top: 14px;
+    border: 1px solid #e4d0be;
+    border-radius: 1rem;
+    background: #f3ebdf;
+    box-shadow: 0 10px 22px rgba(182, 156, 133, 0.12);
+    padding: 14px;
+  }
+
+  .d-productivity-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .d-productivity-stat {
+    min-height: 82px;
+    border-radius: 14px;
+    background: rgba(255, 253, 249, 0.72);
+    border: 1px solid rgba(140, 111, 94, 0.08);
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: 12px 8px;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .d-productivity-stat:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(182, 156, 133, 0.14);
+  }
+
+  .d-productivity-value {
+    display: block;
+    color: #4a3728;
+    font-size: 1.15rem;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .d-productivity-label {
+    display: block;
+    margin-top: 4px;
+    color: #8b6f5e;
+    font-size: 0.78rem;
+    font-weight: 600;
+    opacity: 0.88;
+  }
+
   .d-task-add,
   .d-goal-add { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 
@@ -200,6 +309,24 @@ const css = `
 
   .d-task-list,
   .d-goal-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+
+  .d-task-list {
+    align-content: start;
+  }
+
+  .d-task-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .d-task-scroll::-webkit-scrollbar-thumb {
+    background: #d9c4b2;
+    border-radius: 999px;
+  }
+
+  .d-task-scroll::-webkit-scrollbar-track {
+    background: #f5efe6;
+    border-radius: 999px;
+  }
 
   .d-task,
   .d-goal-item {
@@ -221,39 +348,97 @@ const css = `
   .d-goal-meta { color: #8b6f5e; font-size: 0.8rem; }
   .d-goal-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
-  .d-tracker-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .d-tracker-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
   .d-tracker-item {
-    border: 1px solid #eed6c4;
-    border-radius: 16px;
-    background: #faf8f3;
-    padding: 10px;
+    border: 1px solid;
+    border-radius: 1rem;
+    padding: 18px;
+    box-shadow: 0 14px 30px rgba(119, 108, 96, 0.08);
+    display: grid;
+    gap: 16px;
   }
-  .d-tracker-preview {
-    border-radius: 12px;
-    min-height: 120px;
+  .d-tracker-top {
     display: flex;
-    align-items: flex-end;
-    padding: 10px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .d-tracker-badge {
+    min-width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     color: #4a3728;
+    font-size: 0.82rem;
     font-weight: 800;
-    letter-spacing: 0.2px;
-    margin-bottom: 10px;
-    border: 1px solid rgba(90, 74, 58, 0.12);
   }
-  .d-tracker-box {
-    border: 1px solid #eed6c4;
-    border-radius: 14px;
-    background: #f5efe6;
-    padding: 12px;
+  .d-tracker-tag {
+    min-height: 30px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(90, 74, 58, 0.08);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c5a4d;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
   }
-  .d-tracker-box p { margin: 0 0 6px; color: #5a4a3a; font-size: 0.9rem; }
-  .d-tracker-box ul { margin: 0; padding-left: 18px; color: #8b6f5e; font-size: 0.85rem; line-height: 1.6; }
+  .d-tracker-copy { display: grid; gap: 6px; }
+  .d-tracker-title {
+    margin: 0;
+    color: #4a3728;
+    font-size: 1.15rem;
+    font-weight: 800;
+  }
+  .d-tracker-desc {
+    margin: 0;
+    color: #7b6a5d;
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+  .d-tracker-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .d-tracker-stat {
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(90, 74, 58, 0.08);
+    background: rgba(255, 255, 255, 0.55);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #5f4d40;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+  .d-tracker-stat strong {
+    color: #4a3728;
+    font-size: 0.8rem;
+  }
+  .d-tracker-btn {
+    width: 100%;
+    min-height: 44px;
+    border: none;
+    border-radius: 999px;
+    font-family: inherit;
+    font-size: 0.86rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
 
   @media (max-width: 980px) {
     .d-grid { grid-template-columns: 1fr; }
     .d-timer-wrap { grid-template-columns: 1fr; }
     .d-settings { width: 100%; }
     .d-tracker-grid { grid-template-columns: 1fr; }
+    .d-productivity-grid { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 780px) {
@@ -272,30 +457,72 @@ const css = `
 `;
 
 const trackerData = {
-  Projects: [
-    "Finish dashboard UI polish",
-    "Sync API for progress stats",
-    "Push branch for review",
-  ],
-  Plans: [
-    "2 focus sessions before lunch",
-    "Revise DSA after break",
-    "Plan top 3 for tomorrow",
-  ],
-  Activities: [
-    "Read one chapter",
-    "Solve 20 practice questions",
-    "Quick stretch + hydration",
-  ],
+  Projects: {
+    badge: "PR",
+    tag: "WORK LOG",
+    description: "Track project work, status, and next moves for the day.",
+    buttonLabel: "Add Project",
+  },
+  Plans: {
+    badge: "PL",
+    tag: "PLANNER",
+    description: "Organize today's priorities, study blocks, and planned goals.",
+    buttonLabel: "Update Plans",
+    progress: 0,
+    stats: [
+      { label: "Total", value: 3 },
+      { label: "Active", value: 0 },
+      { label: "Completed", value: 0 },
+    ],
+  },
+  Activities: {
+    badge: "AC",
+    tag: "ROUTINE",
+    description: "Log daily habits, routines, and small wins in one place.",
+    buttonLabel: "Log Activity",
+    progress: 0,
+    stats: [
+      { label: "Total", value: 3 },
+      { label: "Active", value: 0 },
+      { label: "Completed", value: 0 },
+    ],
+  },
 };
 
 const trackerPreviewThemes = {
-  Projects: "linear-gradient(140deg, #d6c3b1, #f5e7db)",
-  Plans: "linear-gradient(140deg, #c9d7c1, #eef6e8)",
-  Activities: "linear-gradient(140deg, #c4d8e8, #e8f4fb)",
+  Projects: {
+    background: "#fff4eb",
+    border: "#f2dac8",
+    badge: "#f5d4bb",
+    tag: "#fff8f1",
+    track: "#f2dfd1",
+    fill: "#d89a76",
+    button: "#8f5f44",
+    buttonText: "#fffaf6",
+  },
+  Plans: {
+    background: "#f3f8ee",
+    border: "#d7e6ca",
+    badge: "#dceccb",
+    tag: "#fbfdf8",
+    track: "#dfebd6",
+    fill: "#8bb06e",
+    button: "#5f8150",
+    buttonText: "#f8fff5",
+  },
+  Activities: {
+    background: "#eef6fb",
+    border: "#d1e3ef",
+    badge: "#d5e9f7",
+    tag: "#f8fcff",
+    track: "#dae9f3",
+    fill: "#7ea8c7",
+    button: "#4f7595",
+    buttonText: "#f7fbff",
+  },
 };
 
-const navItems = ["Dashboard", "Analytics", "Projects", "Study Group", "Home"];
+const navItems = ["Dashboard", "Analytics", "Study Group"];
 
 function formatTime(totalSeconds) {
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
@@ -316,14 +543,67 @@ function normalizeTask(task) {
   };
 }
 
-export default function Dashboard({
-  currentUserName,
-  onBackToLanding,
-  onGoToAnalytics,
-  onGoToProjects,
-  onGoToStudyGroup,
-  onLogout,
-}) {
+function loadFocusStats() {
+  try {
+    const raw = globalThis.localStorage?.getItem(FOCUS_STATS_STORAGE_KEY);
+    if (!raw) {
+      return { dailyCompleted: {}, totalFocusSeconds: 0 };
+    }
+    const parsed = JSON.parse(raw);
+    return {
+      dailyCompleted:
+        parsed?.dailyCompleted && typeof parsed.dailyCompleted === "object" ? parsed.dailyCompleted : {},
+      totalFocusSeconds: Number(parsed?.totalFocusSeconds) || 0,
+    };
+  } catch {
+    return { dailyCompleted: {}, totalFocusSeconds: 0 };
+  }
+}
+
+function formatFocusDuration(totalSeconds) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+
+  return `${minutes}m`;
+}
+
+function getPreviousDateKey(dateKey) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  date.setDate(date.getDate() - 1);
+  return getDateKey(date);
+}
+
+function calculateStreak(dailyCompleted, todayKey) {
+  let streak = 0;
+  let cursor = todayKey;
+
+  while ((Number(dailyCompleted[cursor]) || 0) > 0) {
+    streak += 1;
+    cursor = getPreviousDateKey(cursor);
+  }
+
+  return streak;
+}
+
+function loadProjectsSnapshot() {
+  try {
+    const raw = globalThis.localStorage?.getItem(PROJECTS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStudyGroup, onGoToProjects }) {
   const [collapsed, setCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("Dashboard");
 
@@ -344,6 +624,8 @@ export default function Dashboard({
   const [goalTitle, setGoalTitle] = useState("");
   const [goalMinutes, setGoalMinutes] = useState(25);
   const [activeGoalId, setActiveGoalId] = useState(null);
+  const [projectsSnapshot, setProjectsSnapshot] = useState([]);
+  const [focusStats, setFocusStats] = useState(loadFocusStats);
 
   const activeGoal = useMemo(
     () => goals.find((goal) => goal.id === activeGoalId) ?? null,
@@ -360,6 +642,29 @@ export default function Dashboard({
     []
   );
   const todayKey = useMemo(() => getDateKey(), []);
+  const projectStats = useMemo(() => {
+    const total = projectsSnapshot.length;
+    const completed = projectsSnapshot.filter((project) => project.status === "Completed").length;
+    const ongoing = projectsSnapshot.filter((project) => project.status !== "Completed").length;
+    const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    return {
+      total,
+      ongoing,
+      completed,
+      progress,
+    };
+  }, [projectsSnapshot]);
+  const productivityStats = useMemo(() => {
+    const sessionsToday = Number(focusStats.dailyCompleted?.[todayKey]) || 0;
+    const streak = calculateStreak(focusStats.dailyCompleted ?? {}, todayKey);
+
+    return {
+      streak,
+      sessionsToday,
+      totalFocusTime: formatFocusDuration(focusStats.totalFocusSeconds || 0),
+    };
+  }, [focusStats, todayKey]);
 
   useEffect(() => {
     let mounted = true;
@@ -390,6 +695,25 @@ export default function Dashboard({
   }, []);
 
   useEffect(() => {
+    function syncProjectsSnapshot() {
+      setProjectsSnapshot(loadProjectsSnapshot());
+    }
+
+    syncProjectsSnapshot();
+    globalThis.addEventListener("focus", syncProjectsSnapshot);
+    globalThis.addEventListener("storage", syncProjectsSnapshot);
+
+    return () => {
+      globalThis.removeEventListener("focus", syncProjectsSnapshot);
+      globalThis.removeEventListener("storage", syncProjectsSnapshot);
+    };
+  }, []);
+
+  useEffect(() => {
+    globalThis.localStorage?.setItem(FOCUS_STATS_STORAGE_KEY, JSON.stringify(focusStats));
+  }, [focusStats]);
+
+  useEffect(() => {
     if (!dataReady) return;
     saveStudyData({ goals, goalStats, tasks, taskEvents }).catch(() => {});
   }, [goals, goalStats, tasks, taskEvents, dataReady]);
@@ -399,7 +723,7 @@ export default function Dashboard({
     setRunning(false);
   }, [focusMinutes, breakMinutes, mode]);
 
-  const addGoalStatsSecond = useEffectEvent((goal) => {
+  function addGoalStatsSecond(goal) {
     setGoalStats((prev) => {
       const previous = prev[goal.id] ?? {
         id: goal.id,
@@ -422,9 +746,9 @@ export default function Dashboard({
         },
       };
     });
-  });
+  }
 
-  const markCompletedSession = useEffectEvent((goal) => {
+  function markCompletedSession(goal) {
     setGoalStats((prev) => {
       const previous = prev[goal.id] ?? {
         id: goal.id,
@@ -443,7 +767,21 @@ export default function Dashboard({
         },
       };
     });
-  });
+  }
+
+  function recordCompletedFocusSession(durationSeconds) {
+    setFocusStats((prev) => {
+      const dailyCompleted = {
+        ...(prev.dailyCompleted ?? {}),
+        [todayKey]: (Number(prev.dailyCompleted?.[todayKey]) || 0) + 1,
+      };
+
+      return {
+        dailyCompleted,
+        totalFocusSeconds: (Number(prev.totalFocusSeconds) || 0) + durationSeconds,
+      };
+    });
+  }
 
   useEffect(() => {
     if (!running) return;
@@ -455,6 +793,10 @@ export default function Dashboard({
         if (current > 1) {
           if (shouldRecord) addGoalStatsSecond(activeGoal);
           return current - 1;
+        }
+
+        if (mode === "focus") {
+          recordCompletedFocusSession(focusMinutes * 60);
         }
 
         if (shouldRecord) {
@@ -536,11 +878,18 @@ export default function Dashboard({
     setGoalMinutes(25);
   }
 
-  function loadGoalIntoTimer(goal) {
+  function useGoalInTimer(goal) {
     setActiveGoalId(goal.id);
     setFocusMinutes(goal.minutes);
     setMode("focus");
     setSecondsLeft(goal.minutes * 60);
+    setRunning(false);
+  }
+
+  function clearGoalFromTimer() {
+    setActiveGoalId(null);
+    setMode("focus");
+    setSecondsLeft(focusMinutes * 60);
     setRunning(false);
   }
 
@@ -564,16 +913,9 @@ export default function Dashboard({
                 className={`d-nav-btn ${activeNav === item ? "active" : ""}`}
                 onClick={() => {
                   setActiveNav(item);
+                  if (item === "Dashboard") return;
                   if (item === "Analytics") {
                     onGoToAnalytics?.();
-                    return;
-                  }
-                  if (item === "Projects") {
-                    onGoToProjects?.();
-                    return;
-                  }
-                  if (item === "Home") {
-                    onBackToLanding?.();
                     return;
                   }
                   if (item === "Study Group") {
@@ -587,18 +929,13 @@ export default function Dashboard({
             ))}
           </nav>
 
+          <button type="button" className="d-back-btn" onClick={() => onBackToLanding?.()}>
+            Back to Home
+          </button>
+
           <div className="d-note">
-            <strong style={{ display: "block", marginBottom: 8 }}>Signed in as {currentUserName || "Student"}</strong>
             Set a goal, load it into the timer, and your goal study sessions will auto-record for analytics.
           </div>
-          <button
-            type="button"
-            className="d-btn soft"
-            style={{ width: "100%" }}
-            onClick={() => onLogout?.()}
-          >
-            Sign Out
-          </button>
         </aside>
 
         <main className="d-main">
@@ -615,8 +952,17 @@ export default function Dashboard({
               <h2 className="d-card-title">Cutesy Focus Timer</h2>
 
               {activeGoal ? (
-                <div className="d-active-goal">
-                  Active Goal: {activeGoal.title} ({activeGoal.minutes} min)
+                <div className="d-active-goal-row">
+                  <div className="d-active-goal">
+                    Active Goal: {activeGoal.title} ({activeGoal.minutes} min)
+                  </div>
+                  <button
+                    type="button"
+                    className="d-active-goal-clear"
+                    onClick={clearGoalFromTimer}
+                  >
+                    Remove
+                  </button>
                 </div>
               ) : null}
 
@@ -683,36 +1029,63 @@ export default function Dashboard({
                   </label>
                 </div>
               </div>
+
+              <div className="d-productivity-strip">
+                <div className="d-productivity-grid">
+                  <div className="d-productivity-stat">
+                    <div>
+                      <span className="d-productivity-value">🔥 {productivityStats.streak}</span>
+                      <span className="d-productivity-label">Day Streak</span>
+                    </div>
+                  </div>
+                  <div className="d-productivity-stat">
+                    <div>
+                      <span className="d-productivity-value">🎯 {productivityStats.sessionsToday}</span>
+                      <span className="d-productivity-label">Sessions Today</span>
+                    </div>
+                  </div>
+                  <div className="d-productivity-stat">
+                    <div>
+                      <span className="d-productivity-value">⏱️ {productivityStats.totalFocusTime}</span>
+                      <span className="d-productivity-label">Focus Time</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </section>
 
-            <section className="d-card">
-              <h2 className="d-card-title">Tasks of the Day</h2>
-              <div className="d-task-add">
-                <input
-                  type="text"
-                  value={taskText}
-                  placeholder="Add a task for today"
-                  onChange={(e) => setTaskText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") addTask();
-                  }}
-                />
-                <button className="d-btn primary" onClick={addTask}>Add</button>
+            <section className="d-card d-task-card">
+              <div className="d-task-card-top">
+                <h2 className="d-card-title">Tasks of the Day</h2>
+                <div className="d-task-add">
+                  <input
+                    type="text"
+                    value={taskText}
+                    placeholder="Add a task for today"
+                    onChange={(e) => setTaskText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") addTask();
+                    }}
+                  />
+                  <button className="d-btn primary" onClick={addTask}>Add</button>
+                </div>
               </div>
 
-              <ul className="d-task-list">
-                {tasks.map((task) => (
-                  <li key={task.id} className={`d-task ${task.done ? "done" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={task.done}
-                      onChange={() => toggleTask(task.id)}
-                      aria-label={`Mark ${task.text} complete`}
-                    />
-                    <span>{task.text}</span>
-                  </li>
-                ))}
-              </ul>
+              <div className="d-task-scroll">
+                <ul className="d-task-list">
+                  {tasks.map((task) => (
+                    <li key={task.id} className={`d-task ${task.done ? "done" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={task.done}
+                        onChange={() => toggleTask(task.id)}
+                        aria-label={`Mark ${task.text} complete`}
+                      />
+                      <span>{task.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </section>
 
             <section className="d-card" style={{ gridColumn: "1 / -1" }}>
@@ -756,7 +1129,7 @@ export default function Dashboard({
                           </div>
                         </div>
                         <div className="d-goal-actions">
-                          <button className="d-btn soft" onClick={() => loadGoalIntoTimer(goal)}>Use in Timer</button>
+                          <button className="d-btn soft" onClick={() => useGoalInTimer(goal)}>Use in Timer</button>
                           {goal.id === activeGoalId ? <span className="d-pill">Active</span> : null}
                         </div>
                       </li>
@@ -769,26 +1142,58 @@ export default function Dashboard({
             <section className="d-card" style={{ gridColumn: "1 / -1" }}>
               <h2 className="d-card-title">Daily Tracker</h2>
               <div className="d-tracker-grid">
-                {Object.entries(trackerData).map(([title, items]) => (
-                  <article key={title} className="d-tracker-item">
-                    <div
-                      className="d-tracker-preview"
-                      style={{ background: trackerPreviewThemes[title] }}
-                      role="img"
-                      aria-label={`${title} preview`}
+                {Object.entries(trackerData).map(([title, card]) => {
+                  const theme = trackerPreviewThemes[title];
+                  const stats = title === "Projects"
+                    ? [
+                        { label: "Total", value: projectStats.total },
+                        { label: "Ongoing", value: projectStats.ongoing },
+                        { label: "Completed", value: projectStats.completed },
+                      ]
+                    : card.stats;
+                  const progress = title === "Projects" ? projectStats.progress : card.progress;
+                  const handleAction = title === "Projects" ? onGoToProjects : undefined;
+
+                  return (
+                    <article
+                      key={title}
+                      className="d-tracker-item"
+                      style={{ background: theme.background, borderColor: theme.border }}
                     >
-                      {title}
-                    </div>
-                    <div className="d-tracker-box">
-                      <p>{title} for today:</p>
-                      <ul>
-                        {items.map((item) => (
-                          <li key={item}>{item}</li>
+                      <div className="d-tracker-top">
+                        <div className="d-tracker-badge" style={{ background: theme.badge }}>
+                          {card.badge}
+                        </div>
+                        <div className="d-tracker-tag" style={{ background: theme.tag }}>
+                          {card.tag}
+                        </div>
+                      </div>
+
+                      <div className="d-tracker-copy">
+                        <h3 className="d-tracker-title">{title}</h3>
+                        <p className="d-tracker-desc">{card.description}</p>
+                      </div>
+
+                      <div className="d-tracker-stats">
+                        {stats.map((stat) => (
+                          <div key={stat.label} className="d-tracker-stat">
+                            <strong>{stat.value}</strong>
+                            <span>{stat.label}</span>
+                          </div>
                         ))}
-                      </ul>
-                    </div>
-                  </article>
-                ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="d-tracker-btn"
+                        style={{ background: theme.button, color: theme.buttonText }}
+                        onClick={handleAction}
+                      >
+                        {card.buttonLabel}
+                      </button>
+                    </article>
+                  );
+                })}
               </div>
             </section>
           </div>
