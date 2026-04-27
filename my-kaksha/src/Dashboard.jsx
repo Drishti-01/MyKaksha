@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { fetchStudyData, saveStudyData } from "./api/studyData";
 
 const css = `
@@ -295,7 +295,7 @@ const trackerPreviewThemes = {
   Activities: "linear-gradient(140deg, #c4d8e8, #e8f4fb)",
 };
 
-const navItems = ["Dashboard", "Home", "Study Group"];
+const navItems = ["Dashboard", "Analytics", "Projects", "Study Group", "Home"];
 
 function formatTime(totalSeconds) {
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
@@ -316,7 +316,14 @@ function normalizeTask(task) {
   };
 }
 
-export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
+export default function Dashboard({
+  currentUserName,
+  onBackToLanding,
+  onGoToAnalytics,
+  onGoToProjects,
+  onGoToStudyGroup,
+  onLogout,
+}) {
   const [collapsed, setCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("Dashboard");
 
@@ -392,7 +399,7 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
     setRunning(false);
   }, [focusMinutes, breakMinutes, mode]);
 
-  function addGoalStatsSecond(goal) {
+  const addGoalStatsSecond = useEffectEvent((goal) => {
     setGoalStats((prev) => {
       const previous = prev[goal.id] ?? {
         id: goal.id,
@@ -415,9 +422,9 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
         },
       };
     });
-  }
+  });
 
-  function markCompletedSession(goal) {
+  const markCompletedSession = useEffectEvent((goal) => {
     setGoalStats((prev) => {
       const previous = prev[goal.id] ?? {
         id: goal.id,
@@ -436,7 +443,7 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
         },
       };
     });
-  }
+  });
 
   useEffect(() => {
     if (!running) return;
@@ -529,7 +536,7 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
     setGoalMinutes(25);
   }
 
-  function useGoalInTimer(goal) {
+  function loadGoalIntoTimer(goal) {
     setActiveGoalId(goal.id);
     setFocusMinutes(goal.minutes);
     setMode("focus");
@@ -557,6 +564,14 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
                 className={`d-nav-btn ${activeNav === item ? "active" : ""}`}
                 onClick={() => {
                   setActiveNav(item);
+                  if (item === "Analytics") {
+                    onGoToAnalytics?.();
+                    return;
+                  }
+                  if (item === "Projects") {
+                    onGoToProjects?.();
+                    return;
+                  }
                   if (item === "Home") {
                     onBackToLanding?.();
                     return;
@@ -573,8 +588,17 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
           </nav>
 
           <div className="d-note">
+            <strong style={{ display: "block", marginBottom: 8 }}>Signed in as {currentUserName || "Student"}</strong>
             Set a goal, load it into the timer, and your goal study sessions will auto-record for analytics.
           </div>
+          <button
+            type="button"
+            className="d-btn soft"
+            style={{ width: "100%" }}
+            onClick={() => onLogout?.()}
+          >
+            Sign Out
+          </button>
         </aside>
 
         <main className="d-main">
@@ -732,7 +756,7 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
                           </div>
                         </div>
                         <div className="d-goal-actions">
-                          <button className="d-btn soft" onClick={() => useGoalInTimer(goal)}>Use in Timer</button>
+                          <button className="d-btn soft" onClick={() => loadGoalIntoTimer(goal)}>Use in Timer</button>
                           {goal.id === activeGoalId ? <span className="d-pill">Active</span> : null}
                         </div>
                       </li>

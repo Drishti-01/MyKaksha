@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { loginUser } from "./api/auth";
+import { useAuth } from "./auth/useAuth";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
@@ -136,6 +138,8 @@ const css = `
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { refreshUser } = useAuth();
   const [form, setForm] = useState({ email: "", password: "" });
   const [state, setState] = useState({ loading: false, message: "" });
 
@@ -149,24 +153,13 @@ export default function LoginPage() {
     setState({ loading: true, message: "" });
 
     try {
-      const response = await fetch("/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: form.email.trim(),
-          password: form.password,
-        }),
+      await loginUser({
+        email: form.email.trim(),
+        password: form.password,
       });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.error || "Unable to login");
-      }
-
-      const savedName = typeof data?.user?.name === "string" ? data.user.name.trim() : "";
-      localStorage.setItem("user", form.email.trim().toLowerCase());
-      localStorage.setItem("myKakshaUserName", savedName || "Guest");
-      navigate("/dashboard");
+      await refreshUser();
+      const nextPath = location.state?.from?.pathname || "/dashboard";
+      navigate(nextPath, { replace: true });
     } catch (error) {
       setState({ loading: false, message: error.message || "Login failed" });
       return;

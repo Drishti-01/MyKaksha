@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
+import { useAuth } from "./auth/useAuth";
 
 
 const css = `
@@ -447,7 +448,7 @@ const css = `
   }
 `;
 
-const navItems = ["Dashboard", "Analytics", "Study Group"];
+const navItems = ["Dashboard", "Analytics", "Projects", "Study Group"];
 
 const groupInfo = {
   name: "Placement Prep",
@@ -535,17 +536,15 @@ function PomodoroTimer() {
     return () => clearInterval(timerId);
   }, [running, mode]);
 
-  useEffect(() => {
-    setSecondsLeft(mode === "focus" ? 25 * 60 : 5 * 60);
-  }, [mode]);
-
   function resetTimer() {
     setRunning(false);
     setSecondsLeft(mode === "focus" ? 25 * 60 : 5 * 60);
   }
 
   function switchMode() {
-    setMode((prev) => (prev === "focus" ? "break" : "focus"));
+    const nextMode = mode === "focus" ? "break" : "focus";
+    setMode(nextMode);
+    setSecondsLeft(nextMode === "focus" ? 25 * 60 : 5 * 60);
     setRunning(false);
   }
 
@@ -811,6 +810,7 @@ function CollaborationSection() {
 
 export default function StudyGroupPage() {
   const navigate = useNavigate();
+  const { signOut, user } = useAuth();
   const [activeNav, setActiveNav] = useState("Study Group");
   const [collapsed, setCollapsed] = useState(false);
   const todayLabel = useMemo(
@@ -831,6 +831,10 @@ export default function StudyGroupPage() {
     }
     if (item === "Analytics") {
       navigate("/analytics");
+      return;
+    }
+    if (item === "Projects") {
+      navigate("/projects");
     }
   }
 
@@ -864,7 +868,18 @@ export default function StudyGroupPage() {
             ))}
           </nav>
           <button type="button" className="sg-back-btn" onClick={() => navigate("/")}>Back to Home</button>
+          <button
+            type="button"
+            className="sg-back-btn"
+            onClick={async () => {
+              await signOut();
+              navigate("/login", { replace: true });
+            }}
+          >
+            Sign Out
+          </button>
           <div className="sg-note">
+            <strong style={{ display: "block", marginBottom: 8 }}>Signed in as {user?.name || "Student"}</strong>
             Study together, keep it gentle, and celebrate every focused block.
           </div>
         </aside>

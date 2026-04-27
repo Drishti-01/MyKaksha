@@ -1,82 +1,180 @@
 {
-  "goals": [
-    {
-      "id": 1773078274045,
-      "title": "100 pages of CASA book",
-      "minutes": 40
+  "legacyShared": {
+    "goals": [
+      {
+        "id": 1773078274045,
+        "title": "100 pages of CASA book",
+        "minutes": 40
+      },
+      {
+        "id": 1773073371865,
+        "title": "Cyber",
+        "minutes": 20
+      }
+    ],
+    "goalStats": {
+      "1773073371865": {
+        "id": 1773073371865,
+        "title": "Cyber",
+        "targetMinutes": 20,
+        "sessions": 0,
+        "totalSeconds": 129
+      },
+      "1773078274045": {
+        "id": 1773078274045,
+        "title": "100 pages of CASA book",
+        "targetMinutes": 40,
+        "sessions": 0,
+        "totalSeconds": 230,
+        "dailySeconds": {
+          "2026-03-09": 68,
+          "2026-03-10": 162
+        }
+      }
     },
-    {
-      "id": 1773073371865,
-      "title": "Cyber",
-      "minutes": 20
-    }
-  ],
-  "goalStats": {
-    "1773073371865": {
-      "id": 1773073371865,
-      "title": "Cyber",
-      "targetMinutes": 20,
-      "sessions": 0,
-      "totalSeconds": 129
-    },
-    "1773078274045": {
-      "id": 1773078274045,
-      "title": "100 pages of CASA book",
-      "targetMinutes": 40,
-      "sessions": 0,
-      "totalSeconds": 230,
-      "dailySeconds": {
-        "2026-03-09": 68,
-        "2026-03-10": 162
+    "tasks": [
+      {
+        "id": 1777266502835,
+        "text": "bst",
+        "done": true,
+        "createdAt": 1777266502835,
+        "updatedAt": 1777266506266
+      },
+      {
+        "id": 1773084990648,
+        "text": "Do BackEnd",
+        "done": true,
+        "createdAt": 1773084990648,
+        "updatedAt": 1773242548462
+      },
+      {
+        "id": 1773078377786,
+        "text": "Prepare for tommorow's FA",
+        "done": true,
+        "createdAt": 1773078377786,
+        "updatedAt": 1773078455150
+      },
+      {
+        "id": 1773078285436,
+        "text": "Do DSA questions",
+        "done": true,
+        "createdAt": 1773078285436,
+        "updatedAt": 1777266492100
+      }
+    ],
+    "taskEvents": {
+      "2026-03-09": {
+        "added": 4,
+        "completed": 0
+      },
+      "2026-03-10": {
+        "added": 1,
+        "completed": 0
+      },
+      "2026-03-11": {
+        "added": 1,
+        "completed": 0
+      },
+      "2026-04-27": {
+        "added": 1,
+        "completed": 0
       }
     }
   },
-  "tasks": [
-    {
-      "id": 1777266502835,
-      "text": "bst",
-      "done": true,
-      "createdAt": 1777266502835,
-      "updatedAt": 1777266506266
-    },
-    {
-      "id": 1773084990648,
-      "text": "Do BackEnd",
-      "done": true,
-      "createdAt": 1773084990648,
-      "updatedAt": 1773242548462
-    },
-    {
-      "id": 1773078377786,
-      "text": "Prepare for tommorow's FA",
-      "done": true,
-      "createdAt": 1773078377786,
-      "updatedAt": 1773078455150
-    },
-    {
-      "id": 1773078285436,
-      "text": "Do DSA questions",
-      "done": true,
-      "createdAt": 1773078285436,
-      "updatedAt": 1777266492100
-    }
-  ],
-  "taskEvents": {
-    "2026-03-09": {
-      "added": 4,
-      "completed": 0
-    },
-    "2026-03-10": {
-      "added": 1,
-      "completed": 0
-    },
-    "2026-03-11": {
-      "added": 1,
-      "completed": 0
-    },
-    "2026-04-27": {
-      "added": 1,
-      "completed": 0
+  "users": {
+    "69ef790118bb5b269e065caf": {
+      "goals": [
+        {
+          "id": 1777301905749,
+          "title": "dwa",
+          "minutes": 25
+        },
+        {
+          "id": 1773078274045,
+          "title": "100 pages of CASA book",
+          "minutes": 40
+        },
+        {
+          "id": 1773073371865,
+          "title": "Cyber",
+          "minutes": 20
+        }
+      ],
+      "goalStats": {
+        "1773073371865": {
+          "id": 1773073371865,
+          "title": "Cyber",
+          "targetMinutes": 20,
+          "sessions": 0,
+          "totalSeconds": 129
+        },
+        "1773078274045": {
+          "id": 1773078274045,
+          "title": "100 pages of CASA book",
+          "targetMinutes": 40,
+          "sessions": 0,
+          "totalSeconds": 230,
+          "dailySeconds": {
+            "2026-03-09": 68,
+            "2026-03-10": 162
+          }
+        }
+      },
+      "tasks": [
+        {
+          "id": 1777301895661,
+          "text": "hi",
+          "done": false,
+          "createdAt": 1777301895661,
+          "updatedAt": 1777301899787
+        },
+        {
+          "id": 1777266502835,
+          "text": "bst",
+          "done": true,
+          "createdAt": 1777266502835,
+          "updatedAt": 1777266506266
+        },
+        {
+          "id": 1773084990648,
+          "text": "Do BackEnd",
+          "done": true,
+          "createdAt": 1773084990648,
+          "updatedAt": 1773242548462
+        },
+        {
+          "id": 1773078377786,
+          "text": "Prepare for tommorow's FA",
+          "done": true,
+          "createdAt": 1773078377786,
+          "updatedAt": 1773078455150
+        },
+        {
+          "id": 1773078285436,
+          "text": "Do DSA questions",
+          "done": true,
+          "createdAt": 1773078285436,
+          "updatedAt": 1777266492100
+        }
+      ],
+      "taskEvents": {
+        "2026-03-09": {
+          "added": 4,
+          "completed": 0
+        },
+        "2026-03-10": {
+          "added": 1,
+          "completed": 0
+        },
+        "2026-03-11": {
+          "added": 1,
+          "completed": 0
+        },
+        "2026-04-27": {
+          "added": 2,
+          "completed": 0
+        }
+      }
     }
   }
 }

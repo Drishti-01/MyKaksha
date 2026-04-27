@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchStudyData } from "./api/studyData";
+import { useAuth } from "./auth/useAuth";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
@@ -332,10 +333,11 @@ function shortDuration(totalSeconds) {
   return `${mins}m`;
 }
 
-const navItems = ["Dashboard", "Analytics", "Study Group"];
+const navItems = ["Dashboard", "Analytics", "Projects", "Study Group"];
 
 export default function Analytics() {
   const navigate = useNavigate();
+  const { signOut, user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [studyData, setStudyData] = useState({
@@ -443,6 +445,10 @@ export default function Analytics() {
       navigate("/dashboard");
       return;
     }
+    if (item === "Projects") {
+      navigate("/projects");
+      return;
+    }
     if (item === "Study Group") {
       navigate("/study-group");
     }
@@ -476,8 +482,18 @@ export default function Analytics() {
           </nav>
 
           <button className="a-back-btn" onClick={() => navigate("/")}>Back to Home</button>
+          <button
+            className="a-back-btn"
+            onClick={async () => {
+              await signOut();
+              navigate("/login", { replace: true });
+            }}
+          >
+            Sign Out
+          </button>
 
           <div className="a-note">
+            <strong style={{ display: "block", marginBottom: 8 }}>Signed in as {user?.name || "Student"}</strong>
             Visual analytics combines your goal focus time and daily task completion trends.
           </div>
         </aside>
@@ -565,8 +581,8 @@ export default function Analytics() {
                       <div className="a-snap-val">{todayAdded}</div>
                     </div>
                     <div className="a-snap">
-                      <div className="a-snap-label">Completion Rate</div>
-                      <div className="a-snap-val">{todayCompletionRate}%</div>
+                      <div className="a-snap-label">Focus Sessions</div>
+                      <div className="a-snap-val">{totalSessions}</div>
                     </div>
                     <div className="a-snap">
                       <div className="a-snap-label">Tracked Goals</div>

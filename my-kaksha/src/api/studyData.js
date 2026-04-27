@@ -6,7 +6,9 @@ const DEFAULT_STUDY_DATA = {
 };
 
 export async function fetchStudyData() {
-  const response = await fetch("/api/study-data");
+  const response = await fetch("/api/study-data", {
+    credentials: "include",
+  });
   if (!response.ok) {
     throw new Error(`Failed to fetch study data (${response.status})`);
   }
@@ -23,6 +25,7 @@ export async function fetchStudyData() {
 export async function saveStudyData(payload) {
   const response = await fetch("/api/study-data", {
     method: "PUT",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });

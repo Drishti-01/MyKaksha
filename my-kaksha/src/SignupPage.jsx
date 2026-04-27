@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { signupUser } from "./api/auth";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
@@ -168,20 +169,11 @@ export default function SignupPage() {
     setState({ loading: true, message: "", type: "" });
 
     try {
-      const response = await fetch("/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name.trim(),
-          email: form.email.trim(),
-          password: form.password,
-        }),
+      await signupUser({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        password: form.password,
       });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.error || "Unable to create account");
-      }
 
       setState({ loading: false, message: "Account created! Redirecting...", type: "success" });
       setTimeout(() => navigate("/login"), 900);

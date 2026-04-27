@@ -1,31 +1,57 @@
-l# React + Vite
+# My Kaksha
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+My Kaksha is a React + Vite frontend with an Express backend for ST2-style study management topics.
 
-Currently, two official plugins are available:
+## Current backend concepts covered
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Client-server architecture with Vite frontend and Express backend
+- REST-style routing with `GET`, `POST`, `PUT`, `PATCH`, and `DELETE`
+- Middleware: `cors`, `express.json`, `cookie-parser`, auth protection, validation, centralized error handling
+- Async programming with `fetch`, `fs/promises`, Mongoose, bcrypt, JWT, and Socket.io
+- Sync vs async example in the file-store bootstrap comments
+- Event-loop relevance through timers, sockets, and non-blocking file/database calls
+- JSON storage for study data, projects, and sessions
+- MongoDB + Mongoose for user authentication
+- JWT + HttpOnly cookies + lightweight session tracking
+- Protected routes on both backend and frontend
+- Modular backend structure with routes, controllers, services, middleware, and models
 
-## React Compiler
+## Main API routes
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Auth
 
-## Expanding the ESLint configuration
+- `POST /api/auth/signup`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Legacy compatibility routes are also kept:
 
-## Backend Auth and MongoDB Setup
+- `POST /signup`
+- `POST /login`
 
-This project now uses:
+### Study Data
 
-- MongoDB Atlas for users and study-data persistence
-- JWT-based authentication via HttpOnly cookie (`auth_token`)
-- Password hashing with `bcryptjs`
+- `GET /api/study-data`
+- `PUT /api/study-data`
 
-### Required environment variables
+Study data is stored in JSON and now reads/writes per authenticated user while preserving legacy shared data as fallback.
 
-Create a `.env` file in `my-kaksha/` and add:
+### Projects
+
+- `GET /api/projects`
+- `POST /api/projects`
+- `PUT /api/projects/:projectId`
+- `PATCH /api/projects/:projectId/status`
+- `DELETE /api/projects/:projectId`
+
+### Realtime
+
+- Socket.io room chat on the same backend server
+
+## Environment variables
+
+Create a `.env` file in `my-kaksha/`:
 
 ```env
 MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/<db>?retryWrites=true&w=majority
@@ -34,7 +60,7 @@ JWT_SECRET=replace-with-a-long-random-secret
 JWT_EXPIRES_IN=7d
 ```
 
-### Run
+## Run locally
 
 ```bash
 npm install
@@ -42,13 +68,10 @@ npm run server
 npm run dev
 ```
 
-### Existing frontend compatibility
+Frontend dev server:
 
-Frontend routes and auth calls are unchanged:
+- `http://localhost:5173`
 
-- `POST /signup`
-- `POST /login`
-- `GET /api/study-data`
-- `PUT /api/study-data`
+Backend server:
 
-The backend now validates JWT for study-data routes and stores each user's data separately in MongoDB.
+- `http://localhost:4000`
