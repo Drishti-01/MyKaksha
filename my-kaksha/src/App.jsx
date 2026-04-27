@@ -13,7 +13,9 @@ function DashboardPage() {
   return (
     <Dashboard
       onBackToLanding={() => navigate("/")}
+      onGoToAnalytics={() => navigate("/analytics")}
       onGoToStudyGroup={() => navigate("/study-group")}
+      onGoToProjects={() => navigate("/projects")}
     />
   );
 }

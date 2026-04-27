@@ -83,7 +83,7 @@ const css = `
     margin-top: 6px;
     width: 100%;
     border: 1px solid #eed6c4;
-    background: #fffdf9;
+    background: #f5efe6;
     border-radius: 999px;
     padding: 10px 14px;
     color: #8b6f5e;
@@ -91,7 +91,7 @@ const css = `
     font-family: inherit;
     cursor: pointer;
   }
-  .a-back-btn:hover { background: #f5efe6; }
+  .a-back-btn:hover { background: #fffdf9;; }
 
   .a-main { padding: 26px; overflow: hidden; }
   .a-head-wrap {

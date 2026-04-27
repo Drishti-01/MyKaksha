@@ -33,11 +33,34 @@
   },
   "tasks": [
     {
-      "id": 1777266502835,
-      "text": "bst",
-      "done": true,
-      "createdAt": 1777266502835,
-      "updatedAt": 1777266506266
+      "id": 1777302099772,
+      "text": "es iot st",
+      "done": false,
+      "createdAt": 1777302099772
+    },
+    {
+      "id": 1777302045335,
+      "text": "discrete assignment",
+      "done": false,
+      "createdAt": 1777302045335
+    },
+    {
+      "id": 1777301066674,
+      "text": "dent exam",
+      "done": false,
+      "createdAt": 1777301066674
+    },
+    {
+      "id": 1777300674214,
+      "text": "backend viva",
+      "done": false,
+      "createdAt": 1777300674214
+    },
+    {
+      "id": 1777300174716,
+      "text": "linux file",
+      "done": false,
+      "createdAt": 1777300174716
     },
     {
       "id": 1773084990648,
@@ -75,7 +98,7 @@
       "completed": 0
     },
     "2026-04-27": {
-      "added": 1,
+      "added": 6,
       "completed": 0
     }
   }
