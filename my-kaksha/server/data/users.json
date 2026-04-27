@@ -6,6 +6,7 @@
     "password": "12"
   },
   {
+<<<<<<< HEAD
     "id": 1773132503110,
     "name": "esha",
     "email": "esha@gmail.com",
@@ -16,5 +17,11 @@
     "name": "Esha Sahu",
     "email": "esha63309@gmail.com",
     "password": "eshasahu"
+=======
+    "id": 1773114638680,
+    "name": "Vaibhavi",
+    "email": "vaibhavijha9b@gmail.com",
+    "password": "Vaibhavijha@21"
+>>>>>>> 6c2e25d335b4e6c3415eb972c70e09fd5eb59ce1
   }
 ]

@@ -24,9 +24,10 @@
       "title": "100 pages of CASA book",
       "targetMinutes": 40,
       "sessions": 0,
-      "totalSeconds": 68,
+      "totalSeconds": 230,
       "dailySeconds": {
-        "2026-03-09": 68
+        "2026-03-09": 68,
+        "2026-03-10": 162
       }
     }
   },

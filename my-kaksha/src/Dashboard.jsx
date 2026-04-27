@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchStudyData, saveStudyData } from "./api/studyData";
-import { useNavigate } from "react-router-dom";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
@@ -222,173 +221,33 @@ const css = `
   .d-goal-meta { color: #8b6f5e; font-size: 0.8rem; }
   .d-goal-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
-  .d-tracker-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
-  }
-
+  .d-tracker-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .d-tracker-item {
-    border: 1px solid #e7d2bf;
-    border-radius: 20px;
-    background: linear-gradient(145deg, #fffdf9, #f8f0e6);
-    padding: 12px;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 10px 24px rgba(188, 160, 135, 0.2);
-    transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease;
-  }
-
-  .d-tracker-item::before {
-    content: "";
-    position: absolute;
-    width: 140px;
-    height: 140px;
-    border-radius: 50%;
-    top: -62px;
-    right: -48px;
-    background: rgba(255, 255, 255, 0.3);
-    pointer-events: none;
-  }
-
-  .d-tracker-item:hover {
-    transform: translateY(-5px) scale(1.015);
-    box-shadow: 0 16px 30px rgba(171, 139, 111, 0.24);
-    border-color: #dcbda2;
+    border: 1px solid #eed6c4;
+    border-radius: 16px;
+    background: #faf8f3;
+    padding: 10px;
   }
   .d-tracker-preview {
-    border-radius: 16px;
-    min-height: 142px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 14px;
-    color: #4a3728;
-    margin-bottom: 0;
-    border: 1px solid rgba(90, 74, 58, 0.1);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
-  }
-
-  .d-tracker-preview {
-    border-radius: 16px;
-    min-height: 142px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 14px;
-    color: #4a3728;
-    margin-bottom: 0;
-    border: 1px solid rgba(90, 74, 58, 0.1);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
-  }
-
-  .d-tracker-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 8px;
-    width: 100%;
-  }
-
-  .d-tracker-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
-    border: 1px solid rgba(90, 74, 58, 0.18);
-    background: rgba(255, 253, 249, 0.64);
-    display: grid;
-    place-items: center;
-    font-size: 1rem;
-    line-height: 1;
-  }
-
-  .d-tracker-chip {
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.3px;
-    text-transform: uppercase;
-    padding: 5px 8px;
-    border-radius: 999px;
-    border: 1px solid rgba(90, 74, 58, 0.18);
-    background: rgba(255, 253, 249, 0.58);
-    color: #6f5a47;
-  }
-
-  .d-tracker-meta h3 {
-    margin: 0;
-    font-size: 1.05rem;
-    color: #4a3728;
-  }
-
-  .d-tracker-meta p {
-    margin: 6px 0 0;
-    font-size: 0.82rem;
-    line-height: 1.55;
-    color: #6f5a47;
-  }
-
-  .d-tracker-stats {
-    margin-top: 10px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-  }
-
-  .d-stat-pill {
-    border: 1px solid rgba(90, 74, 58, 0.14);
-    border-radius: 999px;
-    background: rgba(255, 253, 249, 0.64);
-    color: #5f4d3d;
-    font-size: 0.72rem;
-    padding: 5px 9px;
-    font-weight: 600;
-  }
-
-  .d-tracker-progress {
-    margin-top: 11px;
-  }
-
-  .d-progress-label {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: #6f5a47;
-    margin-bottom: 5px;
-  }
-
-  .d-progress-track {
-    height: 7px;
-    border-radius: 999px;
-    background: rgba(90, 74, 58, 0.14);
-    overflow: hidden;
-  }
-
-  .d-progress-fill {
-    height: 100%;
-    border-radius: 999px;
-    background: linear-gradient(90deg, #c8b6a6, #8b6f5e);
-  }
-
-  .d-tracker-cta {
-    margin-top: 12px;
-    width: 100%;
-    border: 1px solid rgba(90, 74, 58, 0.18);
     border-radius: 12px;
-    background: rgba(255, 253, 249, 0.75);
-    color: #5a4a3a;
-    font-size: 0.76rem;
-    font-weight: 700;
-    padding: 8px 10px;
-    cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    min-height: 120px;
+    display: flex;
+    align-items: flex-end;
+    padding: 10px;
+    color: #4a3728;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(90, 74, 58, 0.12);
   }
-
-  .d-tracker-cta:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 8px 14px rgba(172, 140, 112, 0.2);
-    background: rgba(255, 253, 249, 0.92);
+  .d-tracker-box {
+    border: 1px solid #eed6c4;
+    border-radius: 14px;
+    background: #f5efe6;
+    padding: 12px;
   }
+  .d-tracker-box p { margin: 0 0 6px; color: #5a4a3a; font-size: 0.9rem; }
+  .d-tracker-box ul { margin: 0; padding-left: 18px; color: #8b6f5e; font-size: 0.85rem; line-height: 1.6; }
 
   @media (max-width: 980px) {
     .d-grid { grid-template-columns: 1fr; }
@@ -412,40 +271,23 @@ const css = `
   }
 `;
 
-
-const PROJECTS_STORAGE_KEY = "mykaksha_projects";
-const PLANS_STORAGE_KEY = "mykaksha_plans";
-const ACTIVITIES_STORAGE_KEY = "mykaksha_activities";
-
-const trackerCards = [
-  {
-    title: "Projects",
-    subtitle: "Track ongoing builds and completed milestones.",
-    icon: "PR",
-    chip: "Work Log",
-    stats: [],
-    progress: 0,
-    cta: "Add Project",
-  },
-  {
-    title: "Plans",
-    subtitle: "Shape your day with clear, focused priorities.",
-    icon: "PL",
-    chip: "Planner",
-    stats: ["Today 5 tasks", "Completed 3", "Next block 4:30 PM"],
-    progress: 60,
-    cta: "Update Plans",
-  },
-  {
-    title: "Activities",
-    subtitle: "Capture daily progress and learning momentum.",
-    icon: "AC",
-    chip: "Routine",
-    stats: ["Streak 6 days", "Sessions 4", "Focus 125 min"],
-    progress: 74,
-    cta: "Log Activity",
-  },
-];
+const trackerData = {
+  Projects: [
+    "Finish dashboard UI polish",
+    "Sync API for progress stats",
+    "Push branch for review",
+  ],
+  Plans: [
+    "2 focus sessions before lunch",
+    "Revise DSA after break",
+    "Plan top 3 for tomorrow",
+  ],
+  Activities: [
+    "Read one chapter",
+    "Solve 20 practice questions",
+    "Quick stretch + hydration",
+  ],
+};
 
 const trackerPreviewThemes = {
   Projects: "linear-gradient(140deg, #d6c3b1, #f5e7db)",
@@ -453,42 +295,12 @@ const trackerPreviewThemes = {
   Activities: "linear-gradient(140deg, #c4d8e8, #e8f4fb)",
 };
 
-const navItems = ["Dashboard", "Analytics", "Study Group"];
+const navItems = ["Dashboard", "Home", "Study Group"];
 
 function formatTime(totalSeconds) {
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
   const seconds = String(totalSeconds % 60).padStart(2, "0");
   return `${minutes}:${seconds}`;
-}
-
-function getProjectsSummary() {
-  try {
-    const raw = localStorage.getItem(PROJECTS_STORAGE_KEY);
-    const projects = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(projects)) return { total: 0, completed: 0, active: 0 };
-    const completed = projects.filter((project) => project.status === "Completed").length;
-    return {
-      total: projects.length,
-      completed,
-      active: projects.length - completed,
-    };
-  } catch {
-    return { total: 0, completed: 0, active: 0 };
-  }
-}
-
-function loadStringList(key) {
-  try {
-    const raw = localStorage.getItem(key);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function shorten(text, max = 16) {
-  return text.length > max ? `${text.slice(0, max)}...` : text;
 }
 
 function getDateKey(date = new Date()) {
@@ -505,8 +317,6 @@ function normalizeTask(task) {
 }
 
 export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
-
-  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState("Dashboard");
 
@@ -532,9 +342,6 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
     () => goals.find((goal) => goal.id === activeGoalId) ?? null,
     [goals, activeGoalId]
   );
-  const [projectsSummary, setProjectsSummary] = useState(() => getProjectsSummary());
-  const [plans, setPlans] = useState(() => loadStringList(PLANS_STORAGE_KEY));
-  const [activities, setActivities] = useState(() => loadStringList(ACTIVITIES_STORAGE_KEY));
 
   const todayLabel = useMemo(
     () =>
@@ -660,82 +467,7 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
     }, 1000);
 
     return () => clearInterval(timerId);
-  }, [running, mode, skipBreaks, focusMinutes, breakMinutes]);
-
-  useEffect(() => {
-    setProjectsSummary(getProjectsSummary());
-    const onStorage = () => setProjectsSummary(getProjectsSummary());
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(PLANS_STORAGE_KEY, JSON.stringify(plans));
-  }, [plans]);
-
-  useEffect(() => {
-    localStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(activities));
-  }, [activities]);
-
-  function addPlan() {
-    const value = window.prompt("Add a plan for today:");
-    if (!value) return;
-    const text = value.trim();
-    if (!text) return;
-    setPlans((prev) => [text, ...prev]);
-  }
-
-  function addActivity() {
-    const value = window.prompt("Add an activity:");
-    if (!value) return;
-    const text = value.trim();
-    if (!text) return;
-    setActivities((prev) => [text, ...prev]);
-  }
-
-  const trackerCardsWithProjects = useMemo(
-    () =>
-      trackerCards.map((card) => {
-        if (card.title === "Projects") {
-          const progress =
-            projectsSummary.total === 0 ? 0 : Math.round((projectsSummary.completed / projectsSummary.total) * 100);
-          return {
-            ...card,
-            stats: [
-              `Total ${projectsSummary.total}`,
-              `Active ${projectsSummary.active}`,
-              `Completed ${projectsSummary.completed}`,
-            ],
-            progress,
-          };
-        }
-
-        if (card.title === "Plans") {
-          const totalPlans = plans.length;
-          const latestPlan = plans[0] ? shorten(plans[0]) : "None";
-          const progress = Math.min(100, totalPlans * 20);
-          return {
-            ...card,
-            stats: [`Total ${totalPlans}`, `Added today ${totalPlans}`, `Latest ${latestPlan}`],
-            progress,
-          };
-        }
-
-        if (card.title === "Activities") {
-          const totalActivities = activities.length;
-          const latestActivity = activities[0] ? shorten(activities[0]) : "None";
-          const progress = Math.min(100, totalActivities * 20);
-          return {
-            ...card,
-            stats: [`Total ${totalActivities}`, `Logged ${totalActivities}`, `Latest ${latestActivity}`],
-            progress,
-          };
-        }
-
-        return card;
-      }),
-    [projectsSummary, plans, activities]
-  );
+  }, [running, mode, skipBreaks, focusMinutes, breakMinutes, activeGoal]);
 
   function resetTimer() {
     setRunning(false);
@@ -825,8 +557,8 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
                 className={`d-nav-btn ${activeNav === item ? "active" : ""}`}
                 onClick={() => {
                   setActiveNav(item);
-                  if (item === "Analytics") {
-                    navigate("/analytics");
+                  if (item === "Home") {
+                    onBackToLanding?.();
                     return;
                   }
                   if (item === "Study Group") {
@@ -839,8 +571,6 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
               </button>
             ))}
           </nav>
-
-          <button className="d-btn soft d-back-btn" onClick={onBackToLanding}>Back to Home</button>
 
           <div className="d-note">
             Set a goal, load it into the timer, and your goal study sessions will auto-record for analytics.
@@ -1015,48 +745,23 @@ export default function Dashboard({ onBackToLanding, onGoToStudyGroup }) {
             <section className="d-card" style={{ gridColumn: "1 / -1" }}>
               <h2 className="d-card-title">Daily Tracker</h2>
               <div className="d-tracker-grid">
-                {trackerCardsWithProjects.map((card) => (
-                  <article key={card.title} className="d-tracker-item">
+                {Object.entries(trackerData).map(([title, items]) => (
+                  <article key={title} className="d-tracker-item">
                     <div
                       className="d-tracker-preview"
-                      style={{ background: trackerPreviewThemes[card.title] }}
+                      style={{ background: trackerPreviewThemes[title] }}
+                      role="img"
+                      aria-label={`${title} preview`}
                     >
-                      <div className="d-tracker-top">
-                        <span className="d-tracker-icon" aria-hidden="true">{card.icon}</span>
-                        <span className="d-tracker-chip">{card.chip}</span>
-                      </div>
-                      <div className="d-tracker-meta">
-                        <h3>{card.title}</h3>
-                        <p>{card.subtitle}</p>
-                      </div>
-
-                      <div className="d-tracker-stats">
-                        {card.stats.map((stat) => (
-                          <span key={stat} className="d-stat-pill">{stat}</span>
+                      {title}
+                    </div>
+                    <div className="d-tracker-box">
+                      <p>{title} for today:</p>
+                      <ul>
+                        {items.map((item) => (
+                          <li key={item}>{item}</li>
                         ))}
-                      </div>
-
-                      <div className="d-tracker-progress">
-                        <div className="d-progress-label">
-                          <span>Today</span>
-                          <span>{card.progress}%</span>
-                        </div>
-                        <div className="d-progress-track">
-                          <div className="d-progress-fill" style={{ width: `${card.progress}%` }} />
-                        </div>
-                      </div>
-
-                      <button
-                        className="d-tracker-cta"
-                        type="button"
-                        onClick={() => {
-                          if (card.title === "Projects") navigate("/projects");
-                          if (card.title === "Plans") addPlan();
-                          if (card.title === "Activities") addActivity();
-                        }}
-                      >
-                        {card.cta}
-                      </button>
+                      </ul>
                     </div>
                   </article>
                 ))}
