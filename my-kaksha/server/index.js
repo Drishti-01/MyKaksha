@@ -2,17 +2,23 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { Server } from "socket.io";
+import bcrypt from "bcryptjs";
+import { MongoClient } from "mongodb";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 4000;
+const MONGODB_URI = process.env.MONGODB_URI || "";
+const MONGODB_DB = process.env.MONGODB_DB || "mykaksha";
 const dataDir = path.join(__dirname, "data");
 const dataFile = path.join(dataDir, "study-data.json");
-const usersFile = path.join(dataDir, "users.json");
+
+let dbRef;
 
 const defaultData = {
   goals: [],
@@ -28,6 +34,30 @@ function normalizeStudyData(payload = {}) {
     tasks: Array.isArray(payload.tasks) ? payload.tasks : [],
     taskEvents: payload.taskEvents && typeof payload.taskEvents === "object" ? payload.taskEvents : {},
   };
+}
+
+async function getDb() {
+  if (dbRef) {
+    return dbRef;
+  }
+
+  if (!MONGODB_URI) {
+    throw new Error("MONGODB_URI is missing. Set it in .env");
+  }
+
+  const client = new MongoClient(MONGODB_URI, {
+    maxPoolSize: 50,
+    minPoolSize: 10,
+    maxIdleTimeMS: 300000,
+    connectTimeoutMS: 10000,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 30000,
+  });
+
+  await client.connect();
+  dbRef = client.db(MONGODB_DB);
+  await dbRef.collection("users").createIndex({ email: 1 }, { unique: true });
+  return dbRef;
 }
 
 async function ensureDataDir() {
@@ -58,15 +88,6 @@ async function readStudyData() {
 
 async function writeStudyData(data) {
   await writeJsonFile(dataFile, normalizeStudyData(data));
-}
-
-async function readUsers() {
-  const users = await readJsonFile(usersFile, []);
-  return Array.isArray(users) ? users : [];
-}
-
-async function writeUsers(users) {
-  await writeJsonFile(usersFile, users);
 }
 
 const app = express();
@@ -103,23 +124,29 @@ app.post("/signup", async (req, res) => {
       return;
     }
 
-    const users = await readUsers();
-    if (users.some((user) => user.email === email)) {
+    const db = await getDb();
+    const users = db.collection("users");
+    const existing = await users.findOne({ email });
+    if (existing) {
       res.status(409).json({ ok: false, error: "Email already registered" });
       return;
     }
 
-    users.push({
-      id: Date.now(),
+    const passwordHash = await bcrypt.hash(password, 12);
+    await users.insertOne({
       name,
       email,
-      password,
+      passwordHash,
+      createdAt: new Date(),
     });
 
-    await writeUsers(users);
     res.status(201).json({ ok: true, message: "Signup successful" });
-  } catch {
-    res.status(400).json({ ok: false, error: "Invalid request body" });
+  } catch (error) {
+    if (error?.code === 11000) {
+      res.status(409).json({ ok: false, error: "Email already registered" });
+      return;
+    }
+    res.status(500).json({ ok: false, error: "Unable to create account" });
   }
 });
 
@@ -134,10 +161,11 @@ app.post("/login", async (req, res) => {
       return;
     }
 
-    const users = await readUsers();
-    const match = users.find((user) => user.email === email && user.password === password);
+    const db = await getDb();
+    const users = db.collection("users");
+    const match = await users.findOne({ email });
 
-    if (!match) {
+    if (!match || !(await bcrypt.compare(password, match.passwordHash || ""))) {
       res.status(401).json({ ok: false, error: "Invalid email or password" });
       return;
     }
@@ -148,7 +176,7 @@ app.post("/login", async (req, res) => {
       user: { email: match.email, name: match.name },
     });
   } catch {
-    res.status(400).json({ ok: false, error: "Invalid request body" });
+    res.status(500).json({ ok: false, error: "Unable to login" });
   }
 });
 
