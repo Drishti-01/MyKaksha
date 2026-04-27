@@ -209,6 +209,30 @@
           "completed": 0
         }
       }
+    },
+    "69ef97cdddddec13977e01ed": {
+      "goals": [],
+      "goalStats": {},
+      "tasks": [
+        {
+          "id": 1777312721463,
+          "text": "editing videos",
+          "done": false,
+          "createdAt": 1777312721463
+        },
+        {
+          "id": 1777312712362,
+          "text": "hello",
+          "done": false,
+          "createdAt": 1777312712362
+        }
+      ],
+      "taskEvents": {
+        "2026-04-27": {
+          "added": 2,
+          "completed": 0
+        }
+      }
     }
   }
 }

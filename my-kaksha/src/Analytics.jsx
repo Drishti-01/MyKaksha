@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchStudyData } from "./api/studyData";
 import { useAuth } from "./auth/useAuth";
+import AppSidebar from "./components/AppSidebar";
+import useSidebarState from "./components/useSidebarState";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
@@ -338,7 +340,7 @@ const navItems = ["Dashboard", "Analytics", "Projects", "Study Group"];
 export default function Analytics() {
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarState();
   const [loading, setLoading] = useState(true);
   const [studyData, setStudyData] = useState({
     goals: [],
@@ -459,44 +461,24 @@ export default function Analytics() {
       <style dangerouslySetInnerHTML={{ __html: css }} />
 
       <div className={`a-shell ${collapsed ? "collapsed" : ""}`}>
-        <aside className="a-sidebar">
-          <div className="a-brand-row">
-            <div className="a-brand">My <span>Kaksha</span></div>
-            <button className="a-toggle" onClick={() => setCollapsed((v) => !v)} aria-label="Toggle Sidebar">
-              {collapsed ? ">" : "<"}
-            </button>
-          </div>
-
-          <nav className="a-nav" aria-label="Analytics Navigation">
-            {navItems.map((item) => (
-              <button
-                key={item}
-                type="button"
-                className={`a-nav-btn ${item === "Analytics" ? "active" : ""}`}
-                onClick={() => handleNav(item)}
-              >
-                <span className="a-dot" aria-hidden="true" />
-                <span className="a-label">{item}</span>
-              </button>
-            ))}
-          </nav>
-
-          <button className="a-back-btn" onClick={() => navigate("/")}>Back to Home</button>
-          <button
-            className="a-back-btn"
-            onClick={async () => {
+        <AppSidebar
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((v) => !v)}
+          navItems={navItems}
+          activeItem="Analytics"
+          onNavigate={handleNav}
+          primaryAction={{ label: "Back to Home", onClick: () => navigate("/") }}
+          secondaryAction={{
+            label: "Sign Out",
+            onClick: async () => {
               await signOut();
               navigate("/login", { replace: true });
-            }}
-          >
-            Sign Out
-          </button>
-
-          <div className="a-note">
-            <strong style={{ display: "block", marginBottom: 8 }}>Signed in as {user?.name || "Student"}</strong>
-            Visual analytics combines your goal focus time and daily task completion trends.
-          </div>
-        </aside>
+            },
+          }}
+          noteTitle={`Signed in as ${user?.name || "Student"}`}
+          noteText="Visual analytics combines your goal focus time and daily task completion trends."
+          navAriaLabel="Analytics navigation"
+        />
 
         <main className="a-main">
           <section className="a-head-wrap">

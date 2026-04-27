@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { useAuth } from "./auth/useAuth";
+import AppSidebar from "./components/AppSidebar";
+import useSidebarState from "./components/useSidebarState";
 
 
 const css = `
@@ -812,7 +814,7 @@ export default function StudyGroupPage() {
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
   const [activeNav, setActiveNav] = useState("Study Group");
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarState();
   const todayLabel = useMemo(
     () =>
       new Date().toLocaleDateString("en-IN", {
@@ -842,47 +844,24 @@ export default function StudyGroupPage() {
     <>
       <style dangerouslySetInnerHTML={{ __html: css }} />
       <div className={`sg-shell ${collapsed ? "collapsed" : ""}`}>
-        <aside className="sg-sidebar">
-          <div className="sg-brand-row">
-            <div className="sg-brand">My <span>Kaksha</span></div>
-            <button
-              type="button"
-              className="sg-toggle"
-              aria-label="Toggle Sidebar"
-              onClick={() => setCollapsed((prev) => !prev)}
-            >
-              {collapsed ? ">" : "<"}
-            </button>
-          </div>
-          <nav className="sg-nav" aria-label="Study group navigation">
-            {navItems.map((item) => (
-              <button
-                key={item}
-                type="button"
-                className={`sg-nav-btn ${item === activeNav ? "active" : ""}`}
-                onClick={() => handleNav(item)}
-              >
-                <span className="sg-dot" aria-hidden="true" />
-                <span className="sg-label">{item}</span>
-              </button>
-            ))}
-          </nav>
-          <button type="button" className="sg-back-btn" onClick={() => navigate("/")}>Back to Home</button>
-          <button
-            type="button"
-            className="sg-back-btn"
-            onClick={async () => {
+        <AppSidebar
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((prev) => !prev)}
+          navItems={navItems}
+          activeItem={activeNav}
+          onNavigate={handleNav}
+          primaryAction={{ label: "Back to Home", onClick: () => navigate("/") }}
+          secondaryAction={{
+            label: "Sign Out",
+            onClick: async () => {
               await signOut();
               navigate("/login", { replace: true });
-            }}
-          >
-            Sign Out
-          </button>
-          <div className="sg-note">
-            <strong style={{ display: "block", marginBottom: 8 }}>Signed in as {user?.name || "Student"}</strong>
-            Study together, keep it gentle, and celebrate every focused block.
-          </div>
-        </aside>
+            },
+          }}
+          noteTitle={`Signed in as ${user?.name || "Student"}`}
+          noteText="Study together, keep it gentle, and celebrate every focused block."
+          navAriaLabel="Study group navigation"
+        />
         <main className="sg-main">
           <header className="sg-head">
             <div>

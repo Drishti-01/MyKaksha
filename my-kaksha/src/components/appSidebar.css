@@ -1,0 +1,141 @@
+.mk-sidebar {
+  background: linear-gradient(180deg, #fffdf9 0%, #f5efe6 100%);
+  border-right: 1px solid #eed6c4;
+  padding: 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100vh;
+  position: sticky;
+  top: 0;
+}
+
+.mk-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mk-brand {
+  font-size: 1.02rem;
+  font-weight: 800;
+  color: #5a4a3a;
+  white-space: nowrap;
+}
+
+.mk-brand span {
+  color: #c8b6a6;
+}
+
+.mk-toggle {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid #eed6c4;
+  background: #ffffff;
+  color: #8b6f5e;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.mk-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.mk-nav-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #8b6f5e;
+  padding: 10px 11px;
+  border-radius: 12px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  min-height: 40px;
+}
+
+.mk-nav-btn:hover {
+  background: #f5efe6;
+  border-color: #eed6c4;
+}
+
+.mk-nav-btn.active {
+  background: linear-gradient(135deg, #eed6c4, #dac1ad);
+  border-color: #c8b6a6;
+  color: #4a3728;
+}
+
+.mk-nav-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mk-label {
+  white-space: nowrap;
+}
+
+.mk-footer {
+  margin-top: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.mk-action-btn {
+  width: 100%;
+  border-radius: 999px;
+  border: 1px solid #eed6c4;
+  background: #ffffff;
+  color: #8b6f5e;
+  font-family: inherit;
+  font-weight: 600;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+
+.mk-action-btn:hover {
+  background: #f5efe6;
+}
+
+.mk-note {
+  border: 1px solid #eed6c4;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 10px;
+  color: #8b6f5e;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.mk-note strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #4a3728;
+}
+
+.mk-sidebar.collapsed .mk-brand,
+.mk-sidebar.collapsed .mk-label,
+.mk-sidebar.collapsed .mk-action-btn,
+.mk-sidebar.collapsed .mk-note {
+  display: none;
+}
+
+.mk-sidebar.collapsed .mk-nav-btn {
+  justify-content: center;
+  padding-inline: 8px;
+}
+
+.mk-sidebar.collapsed .mk-sidebar-header {
+  justify-content: center;
+}
