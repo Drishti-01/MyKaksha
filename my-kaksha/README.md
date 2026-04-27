@@ -1,4 +1,4 @@
-# React + Vite
+l# React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
@@ -14,3 +14,41 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+## Backend Auth and MongoDB Setup
+
+This project now uses:
+
+- MongoDB Atlas for users and study-data persistence
+- JWT-based authentication via HttpOnly cookie (`auth_token`)
+- Password hashing with `bcryptjs`
+
+### Required environment variables
+
+Create a `.env` file in `my-kaksha/` and add:
+
+```env
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/<db>?retryWrites=true&w=majority
+MONGODB_DB=mykaksha
+JWT_SECRET=replace-with-a-long-random-secret
+JWT_EXPIRES_IN=7d
+```
+
+### Run
+
+```bash
+npm install
+npm run server
+npm run dev
+```
+
+### Existing frontend compatibility
+
+Frontend routes and auth calls are unchanged:
+
+- `POST /signup`
+- `POST /login`
+- `GET /api/study-data`
+- `PUT /api/study-data`
+
+The backend now validates JWT for study-data routes and stores each user's data separately in MongoDB.
