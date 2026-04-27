@@ -1,105 +1,214 @@
 {
-  "goals": [
-    {
-      "id": 1773078274045,
-      "title": "100 pages of CASA book",
-      "minutes": 40
+  "legacyShared": {
+    "goals": [
+      {
+        "id": 1773078274045,
+        "title": "100 pages of CASA book",
+        "minutes": 40
+      },
+      {
+        "id": 1773073371865,
+        "title": "Cyber",
+        "minutes": 20
+      }
+    ],
+    "goalStats": {
+      "1773073371865": {
+        "id": 1773073371865,
+        "title": "Cyber",
+        "targetMinutes": 20,
+        "sessions": 0,
+        "totalSeconds": 129
+      },
+      "1773078274045": {
+        "id": 1773078274045,
+        "title": "100 pages of CASA book",
+        "targetMinutes": 40,
+        "sessions": 0,
+        "totalSeconds": 230,
+        "dailySeconds": {
+          "2026-03-09": 68,
+          "2026-03-10": 162
+        }
+      }
     },
-    {
-      "id": 1773073371865,
-      "title": "Cyber",
-      "minutes": 20
-    }
-  ],
-  "goalStats": {
-    "1773073371865": {
-      "id": 1773073371865,
-      "title": "Cyber",
-      "targetMinutes": 20,
-      "sessions": 0,
-      "totalSeconds": 129
-    },
-    "1773078274045": {
-      "id": 1773078274045,
-      "title": "100 pages of CASA book",
-      "targetMinutes": 40,
-      "sessions": 0,
-      "totalSeconds": 230,
-      "dailySeconds": {
-        "2026-03-09": 68,
-        "2026-03-10": 162
+    "tasks": [
+      {
+        "id": 1777302099772,
+        "text": "es iot st",
+        "done": false,
+        "createdAt": 1777302099772
+      },
+      {
+        "id": 1777302045335,
+        "text": "discrete assignment",
+        "done": false,
+        "createdAt": 1777302045335
+      },
+      {
+        "id": 1777301066674,
+        "text": "dent exam",
+        "done": false,
+        "createdAt": 1777301066674
+      },
+      {
+        "id": 1777300674214,
+        "text": "backend viva",
+        "done": false,
+        "createdAt": 1777300674214
+      },
+      {
+        "id": 1777300174716,
+        "text": "linux file",
+        "done": false,
+        "createdAt": 1777300174716
+      },
+      {
+        "id": 1773084990648,
+        "text": "Do BackEnd",
+        "done": true,
+        "createdAt": 1773084990648,
+        "updatedAt": 1773242548462
+      },
+      {
+        "id": 1773078377786,
+        "text": "Prepare for tommorow's FA",
+        "done": true,
+        "createdAt": 1773078377786,
+        "updatedAt": 1773078455150
+      },
+      {
+        "id": 1773078285436,
+        "text": "Do DSA questions",
+        "done": true,
+        "createdAt": 1773078285436,
+        "updatedAt": 1777266492100
+      }
+    ],
+    "taskEvents": {
+      "2026-03-09": {
+        "added": 4,
+        "completed": 0
+      },
+      "2026-03-10": {
+        "added": 1,
+        "completed": 0
+      },
+      "2026-03-11": {
+        "added": 1,
+        "completed": 0
+      },
+      "2026-04-27": {
+        "added": 6,
+        "completed": 0
       }
     }
   },
-  "tasks": [
-    {
-      "id": 1777302099772,
-      "text": "es iot st",
-      "done": false,
-      "createdAt": 1777302099772
-    },
-    {
-      "id": 1777302045335,
-      "text": "discrete assignment",
-      "done": false,
-      "createdAt": 1777302045335
-    },
-    {
-      "id": 1777301066674,
-      "text": "dent exam",
-      "done": false,
-      "createdAt": 1777301066674
-    },
-    {
-      "id": 1777300674214,
-      "text": "backend viva",
-      "done": false,
-      "createdAt": 1777300674214
-    },
-    {
-      "id": 1777300174716,
-      "text": "linux file",
-      "done": false,
-      "createdAt": 1777300174716
-    },
-    {
-      "id": 1773084990648,
-      "text": "Do BackEnd",
-      "done": true,
-      "createdAt": 1773084990648,
-      "updatedAt": 1773242548462
-    },
-    {
-      "id": 1773078377786,
-      "text": "Prepare for tommorow's FA",
-      "done": true,
-      "createdAt": 1773078377786,
-      "updatedAt": 1773078455150
-    },
-    {
-      "id": 1773078285436,
-      "text": "Do DSA questions",
-      "done": true,
-      "createdAt": 1773078285436,
-      "updatedAt": 1777266492100
-    }
-  ],
-  "taskEvents": {
-    "2026-03-09": {
-      "added": 4,
-      "completed": 0
-    },
-    "2026-03-10": {
-      "added": 1,
-      "completed": 0
-    },
-    "2026-03-11": {
-      "added": 1,
-      "completed": 0
-    },
-    "2026-04-27": {
-      "added": 6,
-      "completed": 0
+  "users": {
+    "69ef81d3d37ae2775f12075a": {
+      "goals": [
+        {
+          "id": 1773078274045,
+          "title": "100 pages of CASA book",
+          "minutes": 40
+        },
+        {
+          "id": 1773073371865,
+          "title": "Cyber",
+          "minutes": 20
+        }
+      ],
+      "goalStats": {
+        "1773073371865": {
+          "id": 1773073371865,
+          "title": "Cyber",
+          "targetMinutes": 20,
+          "sessions": 0,
+          "totalSeconds": 129
+        },
+        "1773078274045": {
+          "id": 1773078274045,
+          "title": "100 pages of CASA book",
+          "targetMinutes": 40,
+          "sessions": 0,
+          "totalSeconds": 230,
+          "dailySeconds": {
+            "2026-03-09": 68,
+            "2026-03-10": 162
+          }
+        }
+      },
+      "tasks": [
+        {
+          "id": 1777302099772,
+          "text": "es iot st",
+          "done": false,
+          "createdAt": 1777302099772
+        },
+        {
+          "id": 1777302045335,
+          "text": "discrete assignment",
+          "done": false,
+          "createdAt": 1777302045335
+        },
+        {
+          "id": 1777301066674,
+          "text": "dent exam",
+          "done": false,
+          "createdAt": 1777301066674
+        },
+        {
+          "id": 1777300674214,
+          "text": "backend viva",
+          "done": false,
+          "createdAt": 1777300674214
+        },
+        {
+          "id": 1777300174716,
+          "text": "linux file",
+          "done": false,
+          "createdAt": 1777300174716
+        },
+        {
+          "id": 1773084990648,
+          "text": "Do BackEnd",
+          "done": true,
+          "createdAt": 1773084990648,
+          "updatedAt": 1773242548462
+        },
+        {
+          "id": 1773078377786,
+          "text": "Prepare for tommorow's FA",
+          "done": true,
+          "createdAt": 1773078377786,
+          "updatedAt": 1773078455150
+        },
+        {
+          "id": 1773078285436,
+          "text": "Do DSA questions",
+          "done": true,
+          "createdAt": 1773078285436,
+          "updatedAt": 1777266492100
+        }
+      ],
+      "taskEvents": {
+        "2026-03-09": {
+          "added": 4,
+          "completed": 0
+        },
+        "2026-03-10": {
+          "added": 1,
+          "completed": 0
+        },
+        "2026-03-11": {
+          "added": 1,
+          "completed": 0
+        },
+        "2026-04-27": {
+          "added": 6,
+          "completed": 0
+        }
+      }
     }
   }
 }

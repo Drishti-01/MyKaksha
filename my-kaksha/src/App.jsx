@@ -6,6 +6,7 @@ import ProjectTracker from "./components/ProjectTracker";
 import Analytics from "./Analytics";
 import SignupPage from "./SignupPage";
 import LoginPage from "./LoginPage";
+import ProtectedRoute from "./auth/ProtectedRoute";
 
 function DashboardPage() {
   const navigate = useNavigate();
@@ -24,10 +25,38 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
-      <Route path="/dashboard" element={<DashboardPage />} />
-      <Route path="/analytics" element={<Analytics />} />
-      <Route path="/study-group" element={<StudyGroupPage />} />
-      <Route path="/projects" element={<ProjectTracker />} />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/analytics"
+        element={
+          <ProtectedRoute>
+            <Analytics />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/study-group"
+        element={
+          <ProtectedRoute>
+            <StudyGroupPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/projects"
+        element={
+          <ProtectedRoute>
+            <ProjectTracker />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/login" element={<LoginPage />} />
     </Routes>

@@ -22,9 +22,29 @@ export async function signup(req, res) {
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
-  await User.create({ name, email, passwordHash });
+  const createdUser = await User.create({ name, email, passwordHash });
 
-  res.status(201).json({ ok: true, message: "Signup successful" });
+  const normalizedUser = {
+    id: String(createdUser._id),
+    email: createdUser.email,
+    name: createdUser.name,
+  };
+
+  const session = await createSessionForUser(normalizedUser);
+  const token = createAuthToken({
+    sub: normalizedUser.id,
+    email: normalizedUser.email,
+    name: normalizedUser.name,
+    sessionId: session.id,
+  });
+
+  res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions());
+  res.cookie(SESSION_COOKIE_NAME, session.id, getAuthCookieOptions());
+  res.status(201).json({
+    ok: true,
+    message: "Signup successful",
+    user: normalizedUser,
+  });
 }
 
 export async function login(req, res) {

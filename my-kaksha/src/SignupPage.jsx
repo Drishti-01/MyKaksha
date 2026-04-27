@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { signupUser } from "./api/auth";
+import { useAuth } from "./auth/useAuth";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
@@ -146,6 +147,7 @@ const css = `
 
 export default function SignupPage() {
   const navigate = useNavigate();
+  const { refreshUser } = useAuth();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -175,8 +177,8 @@ export default function SignupPage() {
         password: form.password,
       });
 
-      setState({ loading: false, message: "Account created! Redirecting...", type: "success" });
-      setTimeout(() => navigate("/login"), 900);
+      await refreshUser();
+      navigate("/dashboard", { replace: true });
     } catch (error) {
       setState({ loading: false, message: error.message || "Signup failed", type: "error" });
     }
