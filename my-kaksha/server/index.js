@@ -2,6 +2,7 @@ import http from "node:http";
 import { Server } from "socket.io";
 import "dotenv/config";
 import { createApp } from "./app.js";
+import { createChatMessage, readRecentChatMessages } from "./services/chatStore.js";
 
 const PORT = Number(process.env.PORT) || 4000;
 
@@ -16,7 +17,7 @@ const io = new Server(server, {
 });
 
 io.on("connection", (socket) => {
-  socket.on("join-room", ({ roomId, username }) => {
+  socket.on("join-room", async ({ roomId, username }) => {
     const normalizedRoom = typeof roomId === "string" && roomId.trim() ? roomId.trim() : "study-room-1";
     const normalizedUser = typeof username === "string" && username.trim() ? username.trim() : "Guest";
 
@@ -29,6 +30,13 @@ io.on("connection", (socket) => {
       text: `${normalizedUser} joined the room`,
       timestamp: new Date().toISOString(),
     });
+
+    try {
+      const history = await readRecentChatMessages(normalizedRoom, 100);
+      socket.emit("chat-history", history);
+    } catch {
+      socket.emit("chat-history", []);
+    }
   });
 
   socket.on("typing", ({ roomId, username }) => {
@@ -42,7 +50,7 @@ io.on("connection", (socket) => {
     socket.to(normalizedRoom).emit("typing", { username: normalizedUser });
   });
 
-  socket.on("send-message", ({ roomId, username, text }) => {
+  socket.on("send-message", async ({ roomId, username, text }) => {
     const normalizedRoom = typeof roomId === "string" && roomId.trim() ? roomId.trim() : socket.data.roomId;
     const normalizedUser = typeof username === "string" && username.trim() ? username.trim() : socket.data.username;
     const cleanText = typeof text === "string" ? text.trim() : "";
@@ -51,12 +59,22 @@ io.on("connection", (socket) => {
       return;
     }
 
-    io.to(normalizedRoom).emit("receive-message", {
-      id: Date.now(),
-      username: normalizedUser,
-      text: cleanText,
-      timestamp: new Date().toISOString(),
-    });
+    try {
+      const message = await createChatMessage({
+        roomId: normalizedRoom,
+        username: normalizedUser,
+        text: cleanText,
+      });
+
+      io.to(normalizedRoom).emit("receive-message", message);
+    } catch {
+      io.to(normalizedRoom).emit("receive-message", {
+        id: Date.now(),
+        username: normalizedUser,
+        text: cleanText,
+        timestamp: new Date().toISOString(),
+      });
+    }
   });
 
   socket.on("disconnect", () => {

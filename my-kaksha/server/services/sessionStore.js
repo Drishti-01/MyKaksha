@@ -1,65 +1,76 @@
 import { randomUUID } from "node:crypto";
-import { readJsonFile, resolveDataFile, writeJsonFile } from "./fileStore.js";
-
-const sessionsFile = resolveDataFile("sessions.json");
-
-function normalizeSessionContainer(payload) {
-  return {
-    sessions: payload?.sessions && typeof payload.sessions === "object" ? payload.sessions : {},
-  };
-}
+import { ensureDatabaseConnection } from "../config/database.js";
+import Session from "../models/Session.js";
 
 export async function createSessionForUser(user) {
-  const payload = await readJsonFile(sessionsFile, { sessions: {} });
-  const container = normalizeSessionContainer(payload);
-  const now = new Date().toISOString();
+  await ensureDatabaseConnection();
+
+  const now = new Date();
   const sessionId = randomUUID();
 
-  container.sessions[sessionId] = {
-    id: sessionId,
+  const session = await Session.create({
+    _id: sessionId,
     userId: user.id,
     email: user.email,
     name: user.name,
     createdAt: now,
     lastSeenAt: now,
-  };
+  });
 
-  await writeJsonFile(sessionsFile, container);
-  return container.sessions[sessionId];
+  return {
+    id: session._id,
+    userId: session.userId,
+    email: session.email,
+    name: session.name,
+    createdAt: session.createdAt.toISOString(),
+    lastSeenAt: session.lastSeenAt.toISOString(),
+  };
 }
 
 export async function readSession(sessionId) {
-  const payload = await readJsonFile(sessionsFile, { sessions: {} });
-  const container = normalizeSessionContainer(payload);
-  return container.sessions[sessionId] || null;
-}
+  await ensureDatabaseConnection();
 
-export async function touchSession(sessionId) {
-  const payload = await readJsonFile(sessionsFile, { sessions: {} });
-  const container = normalizeSessionContainer(payload);
-
-  if (!container.sessions[sessionId]) {
+  const session = await Session.findById(sessionId).lean();
+  if (!session) {
     return null;
   }
 
-  container.sessions[sessionId] = {
-    ...container.sessions[sessionId],
-    lastSeenAt: new Date().toISOString(),
+  return {
+    id: session._id,
+    userId: session.userId,
+    email: session.email,
+    name: session.name,
+    createdAt: new Date(session.createdAt).toISOString(),
+    lastSeenAt: new Date(session.lastSeenAt).toISOString(),
   };
+}
 
-  await writeJsonFile(sessionsFile, container);
-  return container.sessions[sessionId];
+export async function touchSession(sessionId) {
+  await ensureDatabaseConnection();
+
+  const session = await Session.findByIdAndUpdate(
+    sessionId,
+    { lastSeenAt: new Date() },
+    { new: true }
+  ).lean();
+
+  if (!session) {
+    return null;
+  }
+
+  return {
+    id: session._id,
+    userId: session.userId,
+    email: session.email,
+    name: session.name,
+    createdAt: new Date(session.createdAt).toISOString(),
+    lastSeenAt: new Date(session.lastSeenAt).toISOString(),
+  };
 }
 
 export async function deleteSession(sessionId) {
-  const payload = await readJsonFile(sessionsFile, { sessions: {} });
-  const container = normalizeSessionContainer(payload);
+  await ensureDatabaseConnection();
 
-  if (!container.sessions[sessionId]) {
-    return false;
-  }
-
-  delete container.sessions[sessionId];
-  await writeJsonFile(sessionsFile, container);
-  return true;
+  const result = await Session.deleteOne({ _id: sessionId });
+  return result.deletedCount > 0;
 }
