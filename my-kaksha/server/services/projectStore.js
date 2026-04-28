@@ -1,7 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { readJsonFile, resolveDataFile, writeJsonFile } from "./fileStore.js";
+import { ensureDatabaseConnection } from "../config/database.js";
+import Project from "../models/Project.js";
 
-const projectsFile = resolveDataFile("projects.json");
 const ALLOWED_STATUSES = new Set(["In Progress", "Completed"]);
 
 function normalizeTechnologies(value) {
@@ -21,98 +20,80 @@ function normalizeProject(project = {}) {
   };
 }
 
-function normalizeProjectContainer(payload) {
+function toClientProject(project) {
   return {
-    users: payload?.users && typeof payload.users === "object" ? payload.users : {},
+    id: project._id,
+    title: project.title,
+    description: project.description,
+    startDate: project.startDate,
+    endDate: project.endDate,
+    technologies: Array.isArray(project.technologies) ? project.technologies : [],
+    status: ALLOWED_STATUSES.has(project.status) ? project.status : "In Progress",
+    link: project.link || "",
+    createdAt: new Date(project.createdAt).toISOString(),
+    updatedAt: new Date(project.updatedAt).toISOString(),
   };
 }
 
 export async function readProjectsForUser(userId) {
-  const payload = await readJsonFile(projectsFile, { users: {} });
-  const container = normalizeProjectContainer(payload);
-  const userProjects = Array.isArray(container.users[userId]) ? container.users[userId] : [];
-  return userProjects.map((project) => ({
-    ...normalizeProject(project),
-    id: String(project.id || ""),
-    createdAt: project.createdAt || "",
-    updatedAt: project.updatedAt || "",
-  }));
+  await ensureDatabaseConnection();
+
+  const projects = await Project.find({ userId }).sort({ updatedAt: -1 }).lean();
+  return projects.map(toClientProject);
 }
 
 export async function createProjectForUser(userId, project) {
-  const payload = await readJsonFile(projectsFile, { users: {} });
-  const container = normalizeProjectContainer(payload);
-  const existingProjects = Array.isArray(container.users[userId]) ? container.users[userId] : [];
-  const now = new Date().toISOString();
+  await ensureDatabaseConnection();
 
-  const nextProject = {
-    id: randomUUID(),
+  const nextProject = await Project.create({
+    userId,
     ...normalizeProject(project),
-    createdAt: now,
-    updatedAt: now,
-  };
+  });
 
-  container.users[userId] = [...existingProjects, nextProject];
-  await writeJsonFile(projectsFile, container);
-  return nextProject;
+  return toClientProject(nextProject);
 }
 
 export async function replaceProjectForUser(userId, projectId, project) {
-  const payload = await readJsonFile(projectsFile, { users: {} });
-  const container = normalizeProjectContainer(payload);
-  const existingProjects = Array.isArray(container.users[userId]) ? container.users[userId] : [];
-  const projectIndex = existingProjects.findIndex((entry) => entry.id === projectId);
+  await ensureDatabaseConnection();
 
-  if (projectIndex === -1) {
+  const updated = await Project.findOneAndUpdate(
+    { _id: projectId, userId },
+    {
+      ...normalizeProject(project),
+      updatedAt: new Date(),
+    },
+    { new: true }
+  ).lean();
+
+  if (!updated) {
     return null;
   }
 
-  const previous = existingProjects[projectIndex];
-  const nextProject = {
-    id: previous.id,
-    createdAt: previous.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    ...normalizeProject(project),
-  };
-
-  existingProjects[projectIndex] = nextProject;
-  container.users[userId] = existingProjects;
-  await writeJsonFile(projectsFile, container);
-  return nextProject;
+  return toClientProject(updated);
 }
 
 export async function patchProjectStatusForUser(userId, projectId, status) {
-  const payload = await readJsonFile(projectsFile, { users: {} });
-  const container = normalizeProjectContainer(payload);
-  const existingProjects = Array.isArray(container.users[userId]) ? container.users[userId] : [];
-  const projectIndex = existingProjects.findIndex((entry) => entry.id === projectId);
+  await ensureDatabaseConnection();
 
-  if (projectIndex === -1) {
+  const updated = await Project.findOneAndUpdate(
+    { _id: projectId, userId },
+    {
+      status: ALLOWED_STATUSES.has(status) ? status : "In Progress",
+      updatedAt: new Date(),
+    },
+    { new: true }
+  ).lean();
+
+  if (!updated) {
     return null;
   }
 
-  existingProjects[projectIndex] = {
-    ...existingProjects[projectIndex],
-    status: ALLOWED_STATUSES.has(status) ? status : "In Progress",
-    updatedAt: new Date().toISOString(),
-  };
-
-  container.users[userId] = existingProjects;
-  await writeJsonFile(projectsFile, container);
-  return existingProjects[projectIndex];
+  return toClientProject(updated);
 }
 
 export async function deleteProjectForUser(userId, projectId) {
-  const payload = await readJsonFile(projectsFile, { users: {} });
-  const container = normalizeProjectContainer(payload);
-  const existingProjects = Array.isArray(container.users[userId]) ? container.users[userId] : [];
-  const nextProjects = existingProjects.filter((entry) => entry.id !== projectId);
+  await ensureDatabaseConnection();
 
-  if (nextProjects.length === existingProjects.length) {
-    return false;
-  }
-
-  container.users[userId] = nextProjects;
-  await writeJsonFile(projectsFile, container);
-  return true;
+  const result = await Project.deleteOne({ _id: projectId, userId });
+  return result.deletedCount > 0;
 }

@@ -1,4 +1,5 @@
-import { readJsonFile, resolveDataFile, writeJsonFile } from "./fileStore.js";
+import { ensureDatabaseConnection } from "../config/database.js";
+import StudyData from "../models/StudyData.js";
 
 export const DEFAULT_STUDY_DATA = {
   goals: [],
@@ -6,8 +7,6 @@ export const DEFAULT_STUDY_DATA = {
   tasks: [],
   taskEvents: {},
 };
-
-const studyDataFile = resolveDataFile("study-data.json");
 
 export function normalizeStudyData(payload = {}) {
   return {
@@ -18,53 +17,30 @@ export function normalizeStudyData(payload = {}) {
   };
 }
 
-function isLegacyStudyPayload(payload) {
-  return Boolean(
-    payload &&
-      typeof payload === "object" &&
-      !Array.isArray(payload) &&
-      ("goals" in payload || "goalStats" in payload || "tasks" in payload || "taskEvents" in payload)
-  );
-}
-
-function normalizeStudyContainer(payload) {
-  if (isLegacyStudyPayload(payload)) {
-    return {
-      legacyShared: normalizeStudyData(payload),
-      users: {},
-    };
-  }
-
-  return {
-    legacyShared: isLegacyStudyPayload(payload?.legacyShared)
-      ? normalizeStudyData(payload.legacyShared)
-      : { ...DEFAULT_STUDY_DATA },
-    users: payload?.users && typeof payload.users === "object" ? payload.users : {},
-  };
-}
-
 export async function readStudyDataForUser(userId) {
-  const payload = await readJsonFile(studyDataFile, { ...DEFAULT_STUDY_DATA });
+  await ensureDatabaseConnection();
 
-  if (isLegacyStudyPayload(payload)) {
-    return normalizeStudyData(payload);
+  const doc = await StudyData.findOne({ userId }).lean();
+  if (!doc) {
+    return { ...DEFAULT_STUDY_DATA };
   }
 
-  const container = normalizeStudyContainer(payload);
-  const perUserData = container.users[userId];
-  if (perUserData) {
-    return normalizeStudyData(perUserData);
-  }
-
-  return normalizeStudyData(container.legacyShared);
+  return normalizeStudyData(doc);
 }
 
 export async function writeStudyDataForUser(userId, payload) {
-  const existing = await readJsonFile(studyDataFile, { users: {}, legacyShared: { ...DEFAULT_STUDY_DATA } });
-  const container = normalizeStudyContainer(existing);
+  await ensureDatabaseConnection();
 
-  container.users[userId] = normalizeStudyData(payload);
-  await writeJsonFile(studyDataFile, container);
+  const normalized = normalizeStudyData(payload);
+  const updated = await StudyData.findOneAndUpdate(
+    { userId },
+    {
+      userId,
+      ...normalized,
+      updatedAt: new Date(),
+    },
+    { upsert: true, new: true }
+  ).lean();
 
-  return container.users[userId];
+  return normalizeStudyData(updated);
 }
