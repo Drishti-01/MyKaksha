@@ -1,5 +1,14 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { randomUUID } from "node:crypto";
+
+const roomMemberSchema = new mongoose.Schema(
+  {
+    userId: { type: String, required: true, index: true },
+    name: { type: String, required: true, trim: true },
+    joinedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
 
 const roomSchema = new mongoose.Schema(
   {
@@ -10,14 +19,27 @@ const roomSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: 80 },
     type: { type: String, enum: ["public", "private"], default: "public" },
     focusStyle: { type: String, enum: ["discussion", "silent"], default: "discussion" },
-    code: { type: String, required: true, trim: true, uppercase: true, minlength: 6, maxlength: 6, unique: true },
-    createdBy: { type: String, required: true },
-    creatorName: { type: String, default: "" },
-    members: { type: [String], default: [] },
+    code: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+      minlength: 6,
+      maxlength: 6,
+      unique: true,
+      index: true,
+    },
+    createdBy: {
+      userId: { type: String, required: true },
+      name: { type: String, required: true, trim: true },
+    },
+    members: { type: [roomMemberSchema], default: [] },
     weeklyGoalHours: { type: Number, default: null },
     sharedNotes: { type: String, default: "" },
     activityScore: { type: Number, default: 0 },
     focusPoints: { type: Map, of: Number, default: {} },
+    isActive: { type: Boolean, default: true },
+    lastActiveAt: { type: Date, default: Date.now },
   },
   {
     timestamps: true,
@@ -26,5 +48,6 @@ const roomSchema = new mongoose.Schema(
 );
 
 roomSchema.index({ type: 1, createdAt: -1 });
+roomSchema.index({ "createdBy.userId": 1, createdAt: -1 });
 
 export default mongoose.models.Room || mongoose.model("Room", roomSchema);

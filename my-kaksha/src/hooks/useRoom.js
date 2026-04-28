@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
-import { fetchRoomDetail, leaveRoomApi } from "../api/rooms";
+﻿import { useCallback, useEffect, useState } from "react";
+import { fetchRoomDetail, leaveRoomApi, fetchRoomStatsApi, fetchMyRoomStatsApi } from "../api/rooms";
 
 const MY_ROOMS_KEY = "myKakshaMyRooms";
+const MY_ROOMS_META_KEY = "myKakshaMyRoomsMeta";
 
 export function readMyRooms() {
   try {
@@ -13,23 +14,39 @@ export function readMyRooms() {
   }
 }
 
-export function rememberRoom(roomId) {
+export function readMyRoomMeta() {
+  try {
+    const raw = localStorage.getItem(MY_ROOMS_META_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    return map && typeof map === "object" ? map : {};
+  } catch {
+    return {};
+  }
+}
+
+export function rememberRoom(roomId, roomName) {
   if (!roomId) return;
   try {
     const prev = readMyRooms().filter((id) => id !== roomId);
     const next = [roomId, ...prev].slice(0, 3);
     localStorage.setItem(MY_ROOMS_KEY, JSON.stringify(next));
+
+    const meta = readMyRoomMeta();
+    meta[roomId] = {
+      roomName: roomName || meta[roomId]?.roomName || "Room",
+      lastActiveAt: new Date().toISOString(),
+    };
+    localStorage.setItem(MY_ROOMS_META_KEY, JSON.stringify(meta));
   } catch {
     /* ignore */
   }
 }
 
-/**
- * Loads room detail from REST; exposes leaveRoom for cleanup on unmount/navigation.
- */
 export function useRoom(roomId) {
   const [room, setRoom] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [roomStats, setRoomStats] = useState([]);
+  const [myStats, setMyStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -41,9 +58,15 @@ export function useRoom(roomId) {
       setError("");
     }
     try {
-      const data = await fetchRoomDetail(roomId);
-      setRoom(data.room);
-      setLeaderboard(data.leaderboard || []);
+      const [detail, statsRes, myRes] = await Promise.all([
+        fetchRoomDetail(roomId),
+        fetchRoomStatsApi(roomId).catch(() => ({ stats: [] })),
+        fetchMyRoomStatsApi(roomId).catch(() => ({ stats: null })),
+      ]);
+      setRoom(detail.room);
+      setLeaderboard(Array.isArray(detail.leaderboard) ? detail.leaderboard : []);
+      setRoomStats(Array.isArray(statsRes.stats) ? statsRes.stats : []);
+      setMyStats(myRes.stats || null);
     } catch (e) {
       if (!silent) {
         setError(e.message || "Could not load room");
@@ -67,9 +90,17 @@ export function useRoom(roomId) {
     }
   }, [roomId]);
 
-  const setLeaderboardRows = useCallback((rows) => {
-    setLeaderboard(rows);
-  }, []);
-
-  return { room, leaderboard, loading, error, reload, leaveRoom, setLeaderboardRows };
+  return {
+    room,
+    leaderboard,
+    roomStats,
+    myStats,
+    loading,
+    error,
+    reload,
+    leaveRoom,
+    setLeaderboardRows: setLeaderboard,
+    setRoomStatsRows: setRoomStats,
+    setMyStats,
+  };
 }

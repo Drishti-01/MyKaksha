@@ -1,22 +1,34 @@
-import { randomUUID } from "node:crypto";
+﻿import { randomUUID } from "node:crypto";
 import { ensureDatabaseConnection } from "../config/database.js";
-import ChatMessage from "../models/ChatMessage.js";
+import Message from "../models/Message.js";
 import { readJsonFile, resolveDataFile, writeJsonFile } from "./fileStore.js";
 
 const MESSAGES_FILE = resolveDataFile("messages.json");
 
-function toClientMessage(doc) {
-  const username = doc.username;
+function normalizeSender({ userId, name, username }) {
   return {
-    id: doc._id,
-    username,
-    text: doc.text,
-    timestamp: new Date(doc.timestamp).toISOString(),
-    type: username === "System" ? "system" : "user",
+    userId: String(userId || "").trim() || "guest",
+    name: String(name || username || "Guest").trim() || "Guest",
   };
 }
 
-async function appendFileMessage({ roomId, username, text }) {
+function toClientMessage(doc) {
+  const senderName = doc?.sender?.name || "Guest";
+  return {
+    id: doc._id || doc.id,
+    sender: {
+      userId: doc?.sender?.userId || "guest",
+      name: senderName,
+    },
+    username: senderName,
+    text: doc.content,
+    content: doc.content,
+    timestamp: new Date(doc.timestamp).toISOString(),
+    type: doc.type || "user",
+  };
+}
+
+async function appendFileMessage({ roomId, sender, content, type }) {
   const data = await readJsonFile(MESSAGES_FILE, { byRoom: {} });
   if (!data.byRoom || typeof data.byRoom !== "object") {
     data.byRoom = {};
@@ -27,10 +39,11 @@ async function appendFileMessage({ roomId, username, text }) {
 
   const message = {
     id: randomUUID(),
-    username,
-    text,
+    roomId,
+    sender,
+    content,
+    type,
     timestamp: new Date().toISOString(),
-    type: username === "System" ? "system" : "user",
   };
 
   data.byRoom[roomId].push(message);
@@ -40,51 +53,68 @@ async function appendFileMessage({ roomId, username, text }) {
   }
 
   await writeJsonFile(MESSAGES_FILE, data);
-  return {
-    id: message.id,
-    username: message.username,
-    text: message.text,
-    timestamp: message.timestamp,
-    type: message.type,
-  };
+  return toClientMessage(message);
 }
 
-export async function createChatMessage({ roomId, username, text }) {
+export async function createChatMessage({ roomId, username, userId, text, type = "user" }) {
+  const sender = normalizeSender({ userId, name: username, username });
+  const content = String(text || "").trim();
+  if (!content) {
+    throw new Error("Message content is required");
+  }
+
   try {
     await ensureDatabaseConnection();
-    const message = await ChatMessage.create({
+    const message = await Message.create({
       roomId,
-      username,
-      text,
+      sender,
+      content,
+      type: type === "system" ? "system" : "user",
       timestamp: new Date(),
     });
     return toClientMessage(message);
   } catch (error) {
     console.warn("[chatStore] Mongo unavailable, using messages.json fallback:", error?.message || error);
-    return appendFileMessage({ roomId, username, text });
+    return appendFileMessage({
+      roomId,
+      sender,
+      content,
+      type: type === "system" ? "system" : "user",
+    });
   }
 }
 
-export async function readRecentChatMessages(roomId, limit = 100) {
+export async function readRecentChatMessages(roomId, limit = 50, beforeTimestamp) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+
   try {
     await ensureDatabaseConnection();
-    const docs = await ChatMessage.find({ roomId })
+    const query = { roomId };
+    if (beforeTimestamp) {
+      const parsed = new Date(beforeTimestamp);
+      if (!Number.isNaN(parsed.getTime())) {
+        query.timestamp = { $lt: parsed };
+      }
+    }
+
+    const docs = await Message.find(query)
       .sort({ timestamp: -1 })
-      .limit(limit)
+      .limit(safeLimit)
       .lean();
 
     return docs.reverse().map(toClientMessage);
   } catch (error) {
     console.warn("[chatStore] Mongo unavailable, reading messages.json fallback:", error?.message || error);
     const data = await readJsonFile(MESSAGES_FILE, { byRoom: {} });
-    const list = Array.isArray(data.byRoom?.[roomId]) ? data.byRoom[roomId] : [];
-    const sliced = list.slice(-limit).map((m) => ({
-      id: m.id,
-      username: m.username,
-      text: m.text,
-      timestamp: m.timestamp,
-      type: m.username === "System" || m.type === "system" ? "system" : "user",
-    }));
-    return sliced;
+    let list = Array.isArray(data.byRoom?.[roomId]) ? data.byRoom[roomId] : [];
+
+    if (beforeTimestamp) {
+      const parsed = new Date(beforeTimestamp);
+      if (!Number.isNaN(parsed.getTime())) {
+        list = list.filter((m) => new Date(m.timestamp) < parsed);
+      }
+    }
+
+    return list.slice(-safeLimit).map((m) => toClientMessage(m));
   }
 }

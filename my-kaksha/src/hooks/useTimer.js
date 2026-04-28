@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const FOCUS_SEC = 25 * 60;
 const BREAK_SEC = 5 * 60;
@@ -9,14 +9,16 @@ function formatTime(totalSeconds) {
   return `${m}:${s}`;
 }
 
-/**
- * Pomodoro: `timerScope` "personal" keeps time local; "group" listens for `timer-start` / `timer-pause` / `timer-reset`.
- */
-export function useTimer({ socketRef, roomId, timerScope, onSessionComplete, onStatusChange }) {
+export function useTimer({ socketRef, roomId, timerScope, onSessionComplete, onStatusChange, userId }) {
   const [phase, setPhase] = useState("focus");
   const [secondsLeft, setSecondsLeft] = useState(FOCUS_SEC);
   const [running, setRunning] = useState(false);
   const [sessionRound, setSessionRound] = useState(1);
+  const [groupStartedBy, setGroupStartedBy] = useState(null);
+  const [groupDeniedMessage, setGroupDeniedMessage] = useState("");
+  const [celebrate, setCelebrate] = useState(false);
+  const [lastActionReason, setLastActionReason] = useState("");
+
   const endsAtRef = useRef(null);
 
   useEffect(() => {
@@ -31,129 +33,106 @@ export function useTimer({ socketRef, roomId, timerScope, onSessionComplete, onS
     const socket = socketRef?.current;
     if (!socket || timerScope !== "group") return;
 
-    const onStart = (payload) => {
-      if (payload?.roomId && payload.roomId !== roomId) return;
-      console.log("[useTimer] timer-start", payload);
-      const durationSec = Number(payload?.durationSec) || FOCUS_SEC;
-      const startTs = Number(payload?.startTimestamp) || Date.now();
-      endsAtRef.current = startTs + durationSec * 1000;
-      if (payload?.phase === "break" || payload?.phase === "focus") setPhase(payload.phase);
-      setRunning(true);
+    const onTimerSync = (payload = {}) => {
+      if (payload.roomId !== roomId) return;
+      const action = payload.action;
+      if (action === "start") {
+        const duration = Number(payload.duration) || FOCUS_SEC;
+        const startTimestamp = Number(payload.startTimestamp) || Date.now();
+        endsAtRef.current = startTimestamp + duration * 1000;
+        setGroupStartedBy(payload.startedBy || null);
+        setRunning(true);
+      }
+      if (action === "pause") {
+        setRunning(false);
+        endsAtRef.current = null;
+        if (payload.reason) setLastActionReason(payload.reason);
+      }
+      if (action === "reset") {
+        setRunning(false);
+        setPhase("focus");
+        setSecondsLeft(FOCUS_SEC);
+        endsAtRef.current = null;
+        setGroupStartedBy(null);
+      }
     };
 
-    const onPause = (payload) => {
-      if (payload?.roomId && payload.roomId !== roomId) return;
-      console.log("[useTimer] timer-pause");
-      setRunning(false);
-      endsAtRef.current = null;
+    const onDenied = (payload) => {
+      setGroupDeniedMessage(payload?.message || "You cannot control this timer right now");
+      setTimeout(() => setGroupDeniedMessage(""), 2600);
     };
 
-    const onReset = (payload) => {
-      if (payload?.roomId && payload.roomId !== roomId) return;
-      console.log("[useTimer] timer-reset");
-      setRunning(false);
-      endsAtRef.current = null;
-      setSecondsLeft(FOCUS_SEC);
-      setPhase("focus");
-    };
-
-    socket.on("timer-start", onStart);
-    socket.on("timer-pause", onPause);
-    socket.on("timer-reset", onReset);
+    socket.on("timer-sync", onTimerSync);
+    socket.on("timer-sync-denied", onDenied);
     return () => {
-      socket.off("timer-start", onStart);
-      socket.off("timer-pause", onPause);
-      socket.off("timer-reset", onReset);
+      socket.off("timer-sync", onTimerSync);
+      socket.off("timer-sync-denied", onDenied);
     };
   }, [socketRef, roomId, timerScope]);
 
   useEffect(() => {
     if (!running) return undefined;
-
     const id = setInterval(() => {
       if (timerScope === "group" && endsAtRef.current) {
         const next = Math.max(0, Math.round((endsAtRef.current - Date.now()) / 1000));
         setSecondsLeft(next);
         return;
       }
-      setSecondsLeft((s) => (s <= 1 ? 0 : s - 1));
+      setSecondsLeft((prev) => (prev <= 1 ? 0 : prev - 1));
     }, 1000);
-
     return () => clearInterval(id);
   }, [running, timerScope]);
 
-  const zeroHandledRef = useRef(false);
-
   useEffect(() => {
-    if (secondsLeft > 0) {
-      zeroHandledRef.current = false;
-    }
-  }, [secondsLeft]);
+    if (secondsLeft !== 0 || !running) return;
 
-  useEffect(() => {
-    if (secondsLeft !== 0 || !running || zeroHandledRef.current) return undefined;
-    zeroHandledRef.current = true;
     setRunning(false);
     endsAtRef.current = null;
 
-    let cancelled = false;
     (async () => {
       if (phase === "focus") {
-        try {
-          await onSessionComplete?.();
-        } catch {
-          /* ignore */
-        }
-        if (!cancelled) setSessionRound((r) => Math.min(4, r + 1));
+        await onSessionComplete?.({ minutes: 25, sessions: 1 });
+        setSessionRound((s) => Math.min(4, s + 1));
+        setCelebrate(true);
+        setTimeout(() => setCelebrate(false), 1800);
       }
-      if (!cancelled) {
-        const nextPhase = phase === "focus" ? "break" : "focus";
-        setPhase(nextPhase);
-        setSecondsLeft(nextPhase === "focus" ? FOCUS_SEC : BREAK_SEC);
-      }
+      const nextPhase = phase === "focus" ? "break" : "focus";
+      setPhase(nextPhase);
+      setSecondsLeft(nextPhase === "focus" ? FOCUS_SEC : BREAK_SEC);
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [secondsLeft, running, phase, onSessionComplete]);
 
   const start = useCallback(() => {
-    if (timerScope === "group" && socketRef?.current) {
-      const durationSec = phase === "focus" ? FOCUS_SEC : BREAK_SEC;
-      const startTimestamp = Date.now();
-      endsAtRef.current = startTimestamp + durationSec * 1000;
-      socketRef.current.emit("timer-start", { roomId, durationSec, startTimestamp, phase });
-      socketRef.current.emit("group-timer-sync", {
+    if (timerScope === "group") {
+      socketRef?.current?.emit("timer-sync", {
         roomId,
-        state: { running: true, phase, durationSec, endsAt: endsAtRef.current },
+        action: "start",
+        startTimestamp: Date.now(),
+        duration: phase === "focus" ? FOCUS_SEC : BREAK_SEC,
       });
-    } else {
-      endsAtRef.current = null;
+      return;
     }
     setRunning(true);
   }, [timerScope, socketRef, roomId, phase]);
 
   const pause = useCallback(() => {
-    if (timerScope === "group" && socketRef?.current) {
-      socketRef.current.emit("timer-pause", { roomId });
-      socketRef.current.emit("group-timer-sync", {
-        roomId,
-        state: { running: false, phase, secondsLeft, isPaused: true },
-      });
+    if (timerScope === "group") {
+      socketRef?.current?.emit("timer-sync", { roomId, action: "pause" });
+      return;
     }
     setRunning(false);
     endsAtRef.current = null;
-  }, [timerScope, socketRef, roomId, phase, secondsLeft]);
+  }, [timerScope, socketRef, roomId]);
 
   const reset = useCallback(() => {
-    if (timerScope === "group" && socketRef?.current) {
-      socketRef.current.emit("timer-reset", { roomId });
+    if (timerScope === "group") {
+      socketRef?.current?.emit("timer-sync", { roomId, action: "reset" });
+      return;
     }
     setRunning(false);
-    endsAtRef.current = null;
     setPhase("focus");
     setSecondsLeft(FOCUS_SEC);
+    endsAtRef.current = null;
   }, [timerScope, socketRef, roomId]);
 
   const switchPhase = useCallback(() => {
@@ -164,14 +143,28 @@ export function useTimer({ socketRef, roomId, timerScope, onSessionComplete, onS
     endsAtRef.current = null;
   }, [phase]);
 
+  const progress = useMemo(() => {
+    const total = phase === "focus" ? FOCUS_SEC : BREAK_SEC;
+    const ratio = Math.max(0, Math.min(1, secondsLeft / total));
+    return ratio;
+  }, [phase, secondsLeft]);
+
+  const canControlGroup = !groupStartedBy || groupStartedBy.userId === userId;
+
   return {
     phase,
     secondsLeft,
     running,
     formatted: formatTime(secondsLeft),
-    label: phase === "focus" ? "Focus Session" : "Break Time",
+    label: phase === "focus" ? "🎯 Focus Session" : "☕ Break Time",
     sessionOf: `Session ${Math.min(sessionRound, 4)} of 4`,
     sessionRound,
+    progress,
+    groupStartedBy,
+    canControlGroup,
+    groupDeniedMessage,
+    celebrate,
+    lastActionReason,
     start,
     pause,
     reset,

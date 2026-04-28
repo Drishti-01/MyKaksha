@@ -7,6 +7,7 @@ import EmptyStatePrompt from "./components/Analytics/EmptyStatePrompt";
 import QuickInsights from "./components/Analytics/QuickInsights";
 import StreakTracker from "./components/Analytics/StreakTracker";
 import useSidebarState from "./components/useSidebarState";
+import WeeklySummaryCard from "./components/Analytics/WeeklySummaryCard";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
@@ -716,6 +717,7 @@ export default function Analytics() {
 
               <StreakTracker series={series} />
               <QuickInsights series={series} rows={rows} totalSeconds={totalSeconds} totalSessions={totalSessions} />
+              <WeeklySummaryCard series={series} rows={rows} totalSeconds={totalSeconds} totalSessions={totalSessions} />
             </>
           )}
         </main>

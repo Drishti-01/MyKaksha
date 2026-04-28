@@ -1,106 +1,116 @@
-import { useEffect, useState } from "react";
-import { saveRoomNotesApi } from "../../api/rooms";
+﻿import { useEffect, useRef, useState } from "react";
+import { fetchRoomNotesApi, saveRoomNotesApi } from "../../api/rooms";
 
-const privateKey = (roomId) => `myKakshaPrivateNotes:${roomId}`;
+const privateKey = (userId, roomId) => `myKakshaPrivateNotes:${userId}:${roomId}`;
 
-export default function SharedNotes({ roomId, initialShared, socketRef, onSaved }) {
-  const [shared, setShared] = useState(initialShared || "");
+function relativeFrom(iso) {
+  if (!iso) return "just now";
+  const mins = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 60) return `${mins}m ago`;
+  return `${Math.round(mins / 60)}h ago`;
+}
+
+export default function SharedNotes({ roomId, userId, socketRef }) {
+  const [shared, setShared] = useState("");
   const [privateNotes, setPrivateNotes] = useState("");
   const [openPrivate, setOpenPrivate] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [saveOk, setSaveOk] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState("");
+  const [saving, setSaving] = useState(false);
+  const saveTimerRef = useRef(null);
 
   useEffect(() => {
-    setShared(initialShared || "");
-  }, [initialShared, roomId]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchRoomNotesApi(roomId);
+        if (!cancelled) setShared(data.content || "");
+      } catch {
+        if (!cancelled) setShared("");
+      }
+    })();
 
-  useEffect(() => {
     try {
-      setPrivateNotes(localStorage.getItem(privateKey(roomId)) || "");
+      setPrivateNotes(localStorage.getItem(privateKey(userId, roomId)) || "");
     } catch {
       setPrivateNotes("");
     }
-  }, [roomId]);
+
+    return () => {
+      cancelled = true;
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [roomId, userId]);
 
   useEffect(() => {
     const socket = socketRef?.current;
     if (!socket) return;
-    const onRemote = (payload) => {
-      if (!payload || payload.roomId !== roomId) return;
-      console.log("[SharedNotes] notes-updated from socket");
-      setShared(payload.content ?? "");
+
+    const onSync = (payload) => {
+      if (payload?.roomId !== roomId) return;
+      setShared(payload.content || "");
+      setLastSavedAt(payload.updatedAt || new Date().toISOString());
     };
-    socket.on("notes-updated", onRemote);
-    return () => socket.off("notes-updated", onRemote);
+
+    socket.on("notes-sync", onSync);
+    return () => socket.off("notes-sync", onSync);
   }, [socketRef, roomId]);
 
-  async function saveShared() {
+  async function persistNow(nextValue) {
     setSaving(true);
     setError("");
-    setSaveOk(false);
     try {
-      await saveRoomNotesApi(roomId, shared);
-      socketRef?.current?.emit("notes-update", { roomId, content: shared });
-      setSaveOk(true);
-      onSaved?.();
-      setTimeout(() => setSaveOk(false), 2000);
+      await saveRoomNotesApi(roomId, nextValue);
+      const updatedAt = new Date().toISOString();
+      setLastSavedAt(updatedAt);
+      socketRef?.current?.emit("notes-sync", { roomId, content: nextValue, updatedBy: userId, updatedAt });
     } catch (e) {
-      setError(e.message || "Save failed");
+      setError("Save failed, retrying...");
     } finally {
       setSaving(false);
     }
   }
 
-  function persistPrivate(next) {
+  function onSharedChange(e) {
+    const next = e.target.value;
+    setShared(next);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      persistNow(next);
+    }, 3000);
+  }
+
+  function onPrivateChange(e) {
+    const next = e.target.value;
     setPrivateNotes(next);
     try {
-      localStorage.setItem(privateKey(roomId), next);
+      localStorage.setItem(privateKey(userId, roomId), next);
     } catch {
-      /* quota */
+      /* ignore */
     }
   }
 
   return (
-    <section className="sg2-panel" style={{ marginTop: 16 }} aria-label="Shared notes">
-      <h2 style={{ margin: "0 0 10px", fontSize: "1rem", color: "#4a3629" }}>Shared Notes</h2>
-      <p style={{ margin: "0 0 8px", fontSize: "0.78rem", color: "#8b6f5e" }}>Shared with room members</p>
-      <textarea
-        className="sg2-input"
-        style={{ minHeight: 140, resize: "vertical" }}
-        value={shared}
-        onChange={(e) => setShared(e.target.value)}
-        placeholder="Resources, agenda, reminders…"
-      />
-      <button type="button" className="sg2-btn" style={{ marginTop: 10 }} onClick={saveShared} disabled={saving}>
-        {saving ? "Saving…" : "Save Notes"}
-      </button>
-      {saveOk ? (
-        <span style={{ marginLeft: 10, fontSize: "0.82rem", color: "#166534" }}>Saved</span>
-      ) : null}
-      {error ? (
-        <p style={{ color: "#b45309", fontSize: "0.82rem", marginTop: 8 }} role="alert">
-          {error}
-        </p>
-      ) : null}
+    <section className="sg2-panel" style={{ marginTop: 16 }}>
+      <h2 className="sg2-subtitle" style={{ marginBottom: 8 }}>Shared Notes</h2>
+      <textarea className="sg2-input" style={{ minHeight: 180, resize: "vertical" }} value={shared} onChange={onSharedChange} placeholder="Capture links, agenda, formulas, quick recap..." />
 
-      <button
-        type="button"
-        className="sg2-btn secondary"
-        style={{ marginTop: 14, width: "100%" }}
-        onClick={() => setOpenPrivate((v) => !v)}
-      >
-        {openPrivate ? "Hide" : "Show"} My Private Notes
+      <div className="sg2-inline-row" style={{ marginTop: 6 }}>
+        <small className="sg2-soft-text">{shared.length} chars</small>
+        <small className="sg2-soft-text">Last saved {relativeFrom(lastSavedAt)}</small>
+      </div>
+
+      {saving ? <p className="sg2-soft-text" style={{ marginTop: 6 }}>Saving...</p> : null}
+      {error ? <p className="sg2-error" style={{ marginTop: 6 }}>{error}</p> : null}
+
+      <button type="button" className="sg2-btn secondary" style={{ marginTop: 10, width: "100%" }} onClick={() => setOpenPrivate((v) => !v)}>
+        {openPrivate ? "Hide" : "Show"} Private Notes
       </button>
+
       {openPrivate ? (
         <div style={{ marginTop: 10 }}>
-          <p style={{ margin: "0 0 6px", fontSize: "0.78rem", color: "#8b6f5e" }}>Only visible on this device</p>
-          <textarea
-            className="sg2-input"
-            style={{ minHeight: 100, resize: "vertical" }}
-            value={privateNotes}
-            onChange={(e) => persistPrivate(e.target.value)}
-          />
+          <p className="sg2-soft-text" style={{ marginBottom: 6 }}>Only visible to you.</p>
+          <textarea className="sg2-input" style={{ minHeight: 120, resize: "vertical" }} value={privateNotes} onChange={onPrivateChange} />
         </div>
       ) : null}
     </section>

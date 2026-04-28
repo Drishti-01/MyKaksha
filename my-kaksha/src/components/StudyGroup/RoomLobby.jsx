@@ -1,11 +1,29 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { createRoomApi, fetchRoomsList, joinRoomByCodeApi } from "../../api/rooms";
-import { readMyRooms, rememberRoom } from "../../hooks/useRoom";
+import { readMyRoomMeta, readMyRooms, rememberRoom } from "../../hooks/useRoom";
 import RoomCard from "./RoomCard";
 import CreateRoomModal from "./CreateRoomModal";
 import JoinWithCode from "./JoinWithCode";
+
+function formatMins(minutes) {
+  const m = Math.max(0, Number(minutes) || 0);
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return `${h}h ${mm}m`;
+}
+
+function formatRelative(iso) {
+  if (!iso) return "recently";
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.max(1, Math.round(diff / 60000));
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  return `${days}d ago`;
+}
 
 export default function RoomLobby() {
   const navigate = useNavigate();
@@ -13,19 +31,25 @@ export default function RoomLobby() {
   const [rooms, setRooms] = useState([]);
   const [trending, setTrending] = useState([]);
   const [liveCount, setLiveCount] = useState(0);
+  const [myTodayMinutes, setMyTodayMinutes] = useState(0);
+  const [mostActiveToday, setMostActiveToday] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  const roomMeta = useMemo(() => readMyRoomMeta(), [rooms.length]);
 
   async function load() {
     setLoading(true);
     setError("");
     try {
       const data = await fetchRoomsList();
-      setRooms(data.rooms || []);
-      setTrending(data.trending || []);
+      setRooms(Array.isArray(data.rooms) ? data.rooms : []);
+      setTrending(Array.isArray(data.trending) ? data.trending : []);
+      setMostActiveToday(Array.isArray(data.mostActiveToday) ? data.mostActiveToday : []);
       setLiveCount(Number(data.globalStudyingApprox) || 0);
+      setMyTodayMinutes(Number(data.myTodayMinutes) || 0);
     } catch (e) {
       setError(e.message || "Failed to load rooms");
     } finally {
@@ -40,24 +64,23 @@ export default function RoomLobby() {
   useEffect(() => {
     const socket = io({ path: "/socket.io", transports: ["websocket", "polling"] });
     lobbySocketRef.current = socket;
-    const onConnect = () => {
-      console.log("[RoomLobby] socket connected → lobby-join");
+
+    socket.on("connect", () => {
+      console.log("Socket: lobby connected");
       socket.emit("lobby-join");
-    };
-    const onPresence = ({ count }) => {
-      console.log("[RoomLobby] lobby-presence count:", count);
+    });
+
+    socket.on("lobby-presence", ({ count }) => {
       setLiveCount(Number(count) || 0);
-    };
-    const onRoomCreated = () => {
-      console.log("[RoomLobby] room-created → refresh list");
+    });
+
+    socket.on("room-created", () => {
       load();
-    };
-    socket.on("connect", onConnect);
-    socket.on("lobby-presence", onPresence);
-    socket.on("room-created", onRoomCreated);
-    if (socket.connected) onConnect();
+    });
+
+    if (socket.connected) socket.emit("lobby-join");
+
     return () => {
-      console.log("[RoomLobby] socket disconnect / lobby-leave");
       socket.emit("lobby-leave");
       socket.disconnect();
       lobbySocketRef.current = null;
@@ -67,26 +90,27 @@ export default function RoomLobby() {
   async function handleCreate(body) {
     setCreating(true);
     try {
-      const { room } = await createRoomApi(body);
-      rememberRoom(room.id);
+      const data = await createRoomApi(body);
+      const room = data.room;
+      rememberRoom(room.id, room.name);
       lobbySocketRef.current?.emit("room-created", { room });
       setModalOpen(false);
       navigate(`/study-group/${room.id}`);
-    } catch (e) {
-      throw e;
     } finally {
       setCreating(false);
     }
   }
 
   async function handleJoinCode(code) {
-    const { room } = await joinRoomByCodeApi(code);
-    rememberRoom(room.id);
+    const data = await joinRoomByCodeApi(code);
+    const room = data.room;
+    rememberRoom(room.id, room.name);
     navigate(`/study-group/${room.id}`);
   }
 
   function joinRoom(id) {
-    rememberRoom(id);
+    const room = rooms.find((r) => r.id === id);
+    rememberRoom(id, room?.name);
     navigate(`/study-group/${id}`);
   }
 
@@ -97,72 +121,85 @@ export default function RoomLobby() {
 
   return (
     <div>
-      <header style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 16, alignItems: "flex-start" }}>
+      <header className="sg2-lobby-header">
         <div>
           <h1 className="sg2-title">Study Rooms</h1>
           <p className="sg2-sub">Find your focus. Study with others.</p>
         </div>
-        <div className="sg2-badge" aria-live="polite">
-          {liveCount} students studying right now
+        <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
+          <div className="sg2-badge">{liveCount} students studying across all rooms right now</div>
+          <div className="sg2-badge" style={{ fontSize: "0.82rem" }}>
+            You&apos;ve studied {formatMins(myTodayMinutes)} today across all rooms
+          </div>
         </div>
       </header>
 
-      {loading ? <p style={{ color: "#8b6f5e" }}>Loading rooms…</p> : null}
-      {error ? (
-        <p style={{ color: "#b45309" }} role="alert">
-          {error}
-        </p>
-      ) : null}
+      {loading ? <p className="sg2-soft-text">Loading rooms…</p> : null}
+      {error ? <p className="sg2-error" role="alert">{error}</p> : null}
 
       <div className="sg2-grid-lobby">
         <section>
-          <h2 style={{ fontSize: "1.05rem", color: "#4a3629", marginBottom: 14 }}>Available Rooms</h2>
+          <h2 className="sg2-section-title">Available Rooms</h2>
           <div className="sg2-room-grid">
-            {!loading &&
-              rooms.map((room) => (
-                <RoomCard key={room.id} room={room} onJoin={joinRoom} />
-              ))}
+            {!loading && rooms.map((room) => <RoomCard key={room.id} room={room} onJoin={joinRoom} />)}
           </div>
         </section>
 
         <aside className="sg2-actions">
-          <button type="button" className="sg2-btn" onClick={() => setModalOpen(true)}>
-            Create New Room
+          <button type="button" className="sg2-btn sg2-create-btn" onClick={() => setModalOpen(true)}>
+            ✨ Create New Room
           </button>
+
           <JoinWithCode onJoined={handleJoinCode} disabled={loading} />
 
           <div className="sg2-card" style={{ padding: 16 }}>
-            <h3 style={{ margin: "0 0 10px", fontSize: "1rem", color: "#4a3629" }}>My Rooms</h3>
+            <h3 className="sg2-subtitle">My Rooms</h3>
             {myRoomsResolved.length === 0 ? (
-              <p style={{ margin: 0, fontSize: "0.86rem", color: "#8b6f5e" }}>Join a room to see it here (last 3).</p>
+              <p className="sg2-soft-text" style={{ margin: 0 }}>Join a room to see it here (last 3).</p>
             ) : (
-              <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
+              <ul className="sg2-clean-list">
                 {myRoomsResolved.map((r) => (
                   <li key={r.id}>
                     <button type="button" className="sg2-btn secondary" style={{ width: "100%" }} onClick={() => joinRoom(r.id)}>
-                      {r.name}
+                      <span>{r.name}</span>
+                      <small style={{ marginLeft: 8, opacity: 0.7 }}>
+                        {formatRelative(roomMeta[r.id]?.lastActiveAt)}
+                      </small>
                     </button>
                   </li>
                 ))}
               </ul>
             )}
           </div>
+
+          <div className="sg2-card" style={{ padding: 16 }}>
+            <h3 className="sg2-subtitle">Most Active Today</h3>
+            <ol className="sg2-clean-list">
+              {mostActiveToday.slice(0, 3).map((r) => (
+                <li key={r.id} className="sg2-inline-row">
+                  <span>{r.name}</span>
+                  <strong>{r.onlineCount || 0} live</strong>
+                </li>
+              ))}
+            </ol>
+          </div>
         </aside>
       </div>
 
       <section className="sg2-trending">
-        <h2 style={{ margin: "0 0 10px", fontSize: "1.05rem", color: "#4a3629" }}>Trending this week</h2>
-        <ol style={{ margin: 0, paddingLeft: 18, color: "#5a4a3a" }}>
-          {trending.length === 0 ? (
-            <li>No activity data yet</li>
-          ) : (
-            trending.map((r, i) => (
-              <li key={r.id} style={{ marginBottom: 6 }}>
-                <strong>#{i + 1}</strong> {r.name} — score {r.activityScore ?? 0}
+        <h2 className="sg2-section-title" style={{ marginBottom: 10 }}>Trending This Week</h2>
+        {trending.length === 0 ? (
+          <p className="sg2-soft-text">No weekly room activity yet.</p>
+        ) : (
+          <ol className="sg2-clean-list">
+            {trending.map((r, i) => (
+              <li key={r.id} className="sg2-inline-row">
+                <span>#{i + 1} {r.name}</span>
+                <span>{r.weeklyHours || 0}h · {r.weeklyMembers || 0} members</span>
               </li>
-            ))
-          )}
-        </ol>
+            ))}
+          </ol>
+        )}
       </section>
 
       <CreateRoomModal open={modalOpen} onClose={() => setModalOpen(false)} onCreate={handleCreate} loading={creating} />
