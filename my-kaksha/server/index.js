@@ -1,8 +1,24 @@
-import http from "node:http";
+﻿import http from "node:http";
 import { Server } from "socket.io";
 import "dotenv/config";
 import { createApp } from "./app.js";
 import { createChatMessage, readRecentChatMessages } from "./services/chatStore.js";
+import {
+  createRoomSessionEntry,
+  closeRoomSessionEntry,
+  getRoomStats,
+  markRoomActivity,
+  upsertUserRoomStats,
+} from "./services/roomStore.js";
+import {
+  getRoomMembersForClient,
+  registerLobbySocket,
+  removeSocketEverywhere,
+  unregisterLobbySocket,
+  updateMemberStatus,
+  upsertRoomMember,
+  getGlobalStudyingApproxCount,
+} from "./services/studyPresenceRegistry.js";
 
 const PORT = Number(process.env.PORT) || 4000;
 
@@ -16,80 +32,350 @@ const io = new Server(server, {
   },
 });
 
+const groupTimerByRoom = new Map();
+const timerStarterByRoom = new Map();
+
+function broadcastPresence(roomId) {
+  const roomSockets = io.sockets.adapter.rooms.get(roomId);
+  if (!roomSockets) return;
+  for (const socketId of roomSockets) {
+    const sock = io.sockets.sockets.get(socketId);
+    if (!sock) continue;
+    const members = getRoomMembersForClient(roomId, socketId);
+    sock.emit("room-members-update", { roomId, members });
+  }
+}
+
+function emitLobbyCount() {
+  io.to("lobby").emit("lobby-presence", { count: getGlobalStudyingApproxCount() });
+}
+
+function normalizedStatus(status) {
+  const allowed = new Set(["focusing", "break", "online", "away", "invisible"]);
+  return allowed.has(status) ? status : "online";
+}
+
 io.on("connection", (socket) => {
-  socket.on("join-room", async ({ roomId, username }) => {
-    const normalizedRoom = typeof roomId === "string" && roomId.trim() ? roomId.trim() : "study-room-1";
-    const normalizedUser = typeof username === "string" && username.trim() ? username.trim() : "Guest";
+  console.log("[socket] Client connected:", socket.id);
 
-    socket.join(normalizedRoom);
-    socket.data.roomId = normalizedRoom;
-    socket.data.username = normalizedUser;
+  socket.on("lobby-join", () => {
+    registerLobbySocket(socket.id);
+    socket.join("lobby");
+    emitLobbyCount();
+    console.log("Socket: lobby join", socket.id);
+  });
 
-    socket.to(normalizedRoom).emit("user-joined", {
-      username: normalizedUser,
-      text: `${normalizedUser} joined the room`,
-      timestamp: new Date().toISOString(),
-    });
+  socket.on("lobby-leave", () => {
+    unregisterLobbySocket(socket.id);
+    socket.leave("lobby");
+    emitLobbyCount();
+  });
 
+  socket.on("room-created", (payload) => {
+    socket.broadcast.emit("room-created", payload);
+  });
+
+  socket.on("join-room", async (payload = {}) => {
     try {
-      const history = await readRecentChatMessages(normalizedRoom, 100);
+      const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : "";
+      if (!roomId) return;
+
+      const userId = typeof payload.userId === "string" && payload.userId.trim() ? payload.userId.trim() : socket.id;
+      const username = typeof payload.username === "string" && payload.username.trim() ? payload.username.trim() : "Guest";
+      const privacy = payload.privacy && typeof payload.privacy === "object" ? payload.privacy : {};
+
+      const prevRoom = socket.data.roomId;
+      if (prevRoom && prevRoom !== roomId) {
+        socket.leave(prevRoom);
+        io.to(prevRoom).emit("user-left-room", {
+          userId: socket.data.userId,
+          username: socket.data.username,
+          text: `${socket.data.username} left the room`,
+          timestamp: new Date().toISOString(),
+        });
+        broadcastPresence(prevRoom);
+      }
+
+      socket.join(roomId);
+      socket.data.roomId = roomId;
+      socket.data.userId = userId;
+      socket.data.username = username;
+      socket.data.privacy = privacy;
+
+      upsertRoomMember(roomId, {
+        socketId: socket.id,
+        userId,
+        name: username,
+        status: "online",
+        showOnline: privacy.showOnline !== false,
+        showFocus: privacy.showFocus !== false,
+        appearInLeaderboard: privacy.appearInLeaderboard !== false,
+      });
+
+      await createRoomSessionEntry({ roomId, userId, userName: username });
+      await markRoomActivity(roomId);
+
+      io.to(roomId).emit("user-joined-room", {
+        userId,
+        username,
+        text: `${username} joined the room`,
+        timestamp: new Date().toISOString(),
+      });
+
+      socket.emit("room-joined", { roomId, userId, success: true });
+      broadcastPresence(roomId);
+      emitLobbyCount();
+
+      const history = await readRecentChatMessages(roomId, 50);
       socket.emit("chat-history", history);
-    } catch {
-      socket.emit("chat-history", []);
+
+      const roomStats = await getRoomStats(roomId);
+      io.to(roomId).emit("room-stats", { roomId, stats: roomStats });
+
+      console.log(`Socket: user joined room ${roomId}`, { userId, username });
+    } catch (error) {
+      console.error("Socket join-room failed:", error);
+      socket.emit("room-joined", { success: false, message: "Join failed" });
     }
   });
 
-  socket.on("typing", ({ roomId, username }) => {
-    const normalizedRoom = typeof roomId === "string" && roomId.trim() ? roomId.trim() : socket.data.roomId;
-    const normalizedUser = typeof username === "string" && username.trim() ? username.trim() : socket.data.username;
-
-    if (!normalizedRoom || !normalizedUser) {
+  socket.on("room-stats-request", async (payload = {}, cb) => {
+    const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
+    if (!roomId) {
+      if (typeof cb === "function") cb({ success: false, message: "roomId required" });
       return;
     }
-
-    socket.to(normalizedRoom).emit("typing", { username: normalizedUser });
+    try {
+      const stats = await getRoomStats(roomId);
+      if (typeof cb === "function") cb({ success: true, roomId, stats });
+      socket.emit("room-stats", { roomId, stats });
+    } catch (error) {
+      if (typeof cb === "function") cb({ success: false, message: "stats unavailable" });
+    }
   });
 
-  socket.on("send-message", async ({ roomId, username, text }) => {
-    const normalizedRoom = typeof roomId === "string" && roomId.trim() ? roomId.trim() : socket.data.roomId;
-    const normalizedUser = typeof username === "string" && username.trim() ? username.trim() : socket.data.username;
-    const cleanText = typeof text === "string" ? text.trim() : "";
+  socket.on("study-time-update", async (payload = {}) => {
+    try {
+      const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
+      if (!roomId) return;
+      const userId = socket.data.userId;
+      const userName = socket.data.username;
+      const todayMinutes = Math.max(0, Number(payload.todayMinutes) || 0);
+      const sessionsToday = Math.max(0, Number(payload.sessionsToday) || 0);
 
-    if (!normalizedRoom || !normalizedUser || !cleanText) {
-      return;
+      const stats = await upsertUserRoomStats({
+        roomId,
+        userId,
+        userName,
+        deltaMinutes: todayMinutes,
+        deltaSessions: sessionsToday,
+      });
+
+      io.to(roomId).emit("study-time-update", {
+        roomId,
+        userId,
+        name: userName,
+        todayMinutes: stats.totalFocusMinutes || 0,
+        sessionsToday: stats.sessionsCompleted || 0,
+      });
+
+      const allStats = await getRoomStats(roomId);
+      io.to(roomId).emit("room-stats", { roomId, stats: allStats });
+    } catch (error) {
+      console.warn("Socket study-time-update failed:", error?.message || error);
     }
+  });
+
+  socket.on("session-complete", async (payload = {}) => {
+    try {
+      const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
+      if (!roomId) return;
+      const sessionNumber = Math.max(1, Number(payload.sessionNumber) || 1);
+      await upsertUserRoomStats({
+        roomId,
+        userId: socket.data.userId,
+        userName: socket.data.username,
+        deltaMinutes: 25,
+        deltaSessions: 1,
+      });
+      io.to(roomId).emit("session-complete", {
+        roomId,
+        userId: socket.data.userId,
+        name: socket.data.username,
+        sessionNumber,
+      });
+      const allStats = await getRoomStats(roomId);
+      io.to(roomId).emit("room-stats", { roomId, stats: allStats });
+    } catch (error) {
+      console.warn("Socket session-complete failed:", error?.message || error);
+    }
+  });
+
+  socket.on("user-status-update", (payload = {}) => {
+    const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
+    if (!roomId) return;
+    const status = normalizedStatus(String(payload.status || "online"));
+    updateMemberStatus(roomId, socket.id, status);
+    broadcastPresence(roomId);
+    io.to(roomId).emit("user-status-update", {
+      roomId,
+      userId: socket.data.userId,
+      name: socket.data.username,
+      status,
+    });
+  });
+
+  socket.on("typing", (payload = {}) => {
+    const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
+    if (!roomId) return;
+    const name = typeof payload.username === "string" && payload.username.trim() ? payload.username.trim() : socket.data.username;
+    socket.to(roomId).emit("typing", { username: name });
+    socket.to(roomId).emit("typing-start", { userId: socket.data.userId, name });
+  });
+
+  socket.on("typing-stop", () => {
+    const roomId = socket.data.roomId;
+    if (!roomId) return;
+    socket.to(roomId).emit("typing-stop", { userId: socket.data.userId });
+  });
+
+  socket.on("send-message", async (payload = {}) => {
+    const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
+    if (!roomId) return;
+    const text = String(payload.text || "").trim();
+    if (!text) return;
 
     try {
       const message = await createChatMessage({
-        roomId: normalizedRoom,
-        username: normalizedUser,
-        text: cleanText,
+        roomId,
+        userId: socket.data.userId,
+        username: socket.data.username,
+        text,
+        type: payload.type === "system" ? "system" : "user",
       });
-
-      io.to(normalizedRoom).emit("receive-message", message);
-    } catch {
-      io.to(normalizedRoom).emit("receive-message", {
-        id: Date.now(),
-        username: normalizedUser,
-        text: cleanText,
-        timestamp: new Date().toISOString(),
-      });
+      io.to(roomId).emit("receive-message", message);
+      await markRoomActivity(roomId);
+    } catch (error) {
+      console.warn("Socket send-message fallback failed:", error?.message || error);
     }
   });
 
-  socket.on("disconnect", () => {
-    const leftRoom = socket.data.roomId;
-    const leftUser = socket.data.username;
+  socket.on("notes-sync", (payload = {}) => {
+    const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
+    const content = typeof payload.content === "string" ? payload.content : "";
+    if (!roomId) return;
+    socket.to(roomId).emit("notes-sync", {
+      roomId,
+      content,
+      updatedBy: socket.data.username,
+      updatedAt: new Date().toISOString(),
+    });
+  });
 
-    if (!leftRoom || !leftUser) {
+  socket.on("timer-sync", (payload = {}) => {
+    const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
+    if (!roomId) return;
+
+    const action = payload.action;
+    if (!["start", "pause", "reset"].includes(action)) return;
+
+    const starter = timerStarterByRoom.get(roomId);
+    if (action === "start") {
+      if (starter && starter.userId && starter.userId !== socket.data.userId) {
+        socket.emit("timer-sync-denied", {
+          roomId,
+          message: `Group session is currently controlled by ${starter.name}`,
+        });
+        return;
+      }
+      timerStarterByRoom.set(roomId, { userId: socket.data.userId, name: socket.data.username });
+    }
+
+    if ((action === "pause" || action === "reset") && starter && starter.userId !== socket.data.userId) {
+      socket.emit("timer-sync-denied", {
+        roomId,
+        message: `Only ${starter.name} can ${action} this group timer`,
+      });
       return;
     }
 
-    socket.to(leftRoom).emit("user-left", {
-      username: leftUser,
-      text: `${leftUser} left the room`,
-      timestamp: new Date().toISOString(),
+    if (action === "reset") {
+      timerStarterByRoom.delete(roomId);
+      groupTimerByRoom.delete(roomId);
+    } else {
+      groupTimerByRoom.set(roomId, {
+        action,
+        startTimestamp: Number(payload.startTimestamp) || Date.now(),
+        duration: Number(payload.duration) || Number(payload.durationSec) || 1500,
+        startedBy: socket.data.userId,
+      });
+    }
+
+    io.to(roomId).emit("timer-sync", {
+      roomId,
+      action,
+      startTimestamp: Number(payload.startTimestamp) || Date.now(),
+      duration: Number(payload.duration) || Number(payload.durationSec) || 1500,
+      startedBy: { userId: socket.data.userId, name: socket.data.username },
     });
+  });
+
+  socket.on("get-room-members", (cb) => {
+    const roomId = socket.data.roomId;
+    if (typeof cb !== "function") return;
+    if (!roomId) return cb({ members: [] });
+    cb({ members: getRoomMembersForClient(roomId, socket.id) });
+  });
+
+  socket.on("disconnect", async () => {
+    const roomId = socket.data.roomId;
+    const userId = socket.data.userId;
+    const username = socket.data.username;
+
+    removeSocketEverywhere(socket.id);
+    emitLobbyCount();
+
+    if (!roomId || !userId) return;
+
+    try {
+      const closed = await closeRoomSessionEntry({ roomId, userId });
+      if (closed && closed.totalMinutes > 0) {
+        await upsertUserRoomStats({
+          roomId,
+          userId,
+          userName: username,
+          deltaMinutes: closed.totalMinutes,
+          deltaSessions: closed.sessionsCompleted || 0,
+        });
+      }
+
+      const starter = timerStarterByRoom.get(roomId);
+      if (starter?.userId === userId) {
+        timerStarterByRoom.delete(roomId);
+        groupTimerByRoom.delete(roomId);
+        io.to(roomId).emit("timer-sync", {
+          roomId,
+          action: "pause",
+          startedBy: { userId, name: username },
+          reason: `Timer paused — ${username} left`,
+        });
+      }
+
+      io.to(roomId).emit("user-left-room", {
+        roomId,
+        userId,
+        username,
+        text: `${username} left the room`,
+        timestamp: new Date().toISOString(),
+      });
+
+      const stats = await getRoomStats(roomId);
+      io.to(roomId).emit("room-stats", { roomId, stats });
+    } catch (error) {
+      console.warn("Socket disconnect cleanup failed:", error?.message || error);
+    }
+
+    broadcastPresence(roomId);
   });
 });
 
