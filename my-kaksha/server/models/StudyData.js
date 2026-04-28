@@ -7,16 +7,22 @@ const studyDataSchema = new mongoose.Schema(
       required: true,
       unique: true,
       index: true,
-      trim: true,
     },
-    data: {
+    goals: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+    goalStats: {
       type: mongoose.Schema.Types.Mixed,
-      default: () => ({
-        goals: [],
-        goalStats: {},
-        tasks: [],
-        taskEvents: {},
-      }),
+      default: {},
+    },
+    tasks: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+    taskEvents: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
   },
   {

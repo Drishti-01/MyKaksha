@@ -704,6 +704,14 @@ function GroupChat() {
       setMessages((prev) => [...prev, incomingMessage]);
     });
 
+    socket.on("chat-history", (history) => {
+      if (!Array.isArray(history)) {
+        return;
+      }
+
+      setMessages(history);
+    });
+
     socket.on("user-joined", (notice) => {
       setMessages((prev) => [
         ...prev,
@@ -726,6 +734,11 @@ function GroupChat() {
 
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      socket.off("chat-history");
+      socket.off("typing");
+      socket.off("receive-message");
+      socket.off("user-joined");
+      socket.off("user-left");
       socket.disconnect();
     };
   }, [currentUserName]);
