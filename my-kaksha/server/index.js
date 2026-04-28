@@ -3,6 +3,7 @@ import { Server } from "socket.io";
 import "dotenv/config";
 import { createApp } from "./app.js";
 import { createChatMessage, readRecentChatMessages } from "./services/chatStore.js";
+import { AUTH_COOKIE_NAME, verifyAuthToken } from "./utils/auth.js";
 import {
   createRoomSessionEntry,
   closeRoomSessionEntry,
@@ -19,6 +20,7 @@ import {
   upsertRoomMember,
   getGlobalStudyingApproxCount,
 } from "./services/studyPresenceRegistry.js";
+import { readSession, touchSession } from "./services/sessionStore.js";
 
 const PORT = Number(process.env.PORT) || 4000;
 
@@ -32,8 +34,30 @@ const io = new Server(server, {
   },
 });
 
+app.set("io", io);
+
 const groupTimerByRoom = new Map();
 const timerStarterByRoom = new Map();
+
+function readCookieValue(cookieHeader, name) {
+  if (!cookieHeader) return "";
+  const pairs = String(cookieHeader).split(/;\s*/);
+  for (const pair of pairs) {
+    const [rawKey, ...rest] = pair.split("=");
+    if (rawKey === name) return decodeURIComponent(rest.join("=") || "");
+  }
+  return "";
+}
+
+function dedupeMembersByUserId(members = []) {
+  const map = new Map();
+  for (const member of members) {
+    const key = String(member?.userId || "");
+    if (!key || map.has(key)) continue;
+    map.set(key, member);
+  }
+  return [...map.values()];
+}
 
 function broadcastPresence(roomId) {
   const roomSockets = io.sockets.adapter.rooms.get(roomId);
@@ -41,7 +65,7 @@ function broadcastPresence(roomId) {
   for (const socketId of roomSockets) {
     const sock = io.sockets.sockets.get(socketId);
     if (!sock) continue;
-    const members = getRoomMembersForClient(roomId, socketId);
+    const members = dedupeMembersByUserId(getRoomMembersForClient(roomId, socketId));
     sock.emit("room-members-update", { roomId, members });
   }
 }
@@ -55,8 +79,38 @@ function normalizedStatus(status) {
   return allowed.has(status) ? status : "online";
 }
 
+io.use(async (socket, next) => {
+  try {
+    const authToken = socket.handshake.auth?.token || readCookieValue(socket.request.headers.cookie, AUTH_COOKIE_NAME);
+    if (!authToken) {
+      return next(new Error("Authentication required"));
+    }
+
+    const payload = verifyAuthToken(authToken);
+    if (!payload?.sub || !payload.sessionId) {
+      return next(new Error("Invalid token"));
+    }
+
+    const session = await readSession(payload.sessionId);
+    if (!session || session.userId !== payload.sub) {
+      return next(new Error("Authentication required"));
+    }
+
+    await touchSession(payload.sessionId);
+
+    socket.userId = String(payload.sub);
+    socket.userName = String(payload.name || "Student");
+    socket.sessionId = String(payload.sessionId);
+    next();
+  } catch (error) {
+    next(new Error("Invalid token"));
+  }
+});
+
 io.on("connection", (socket) => {
-  console.log("[socket] Client connected:", socket.id);
+  console.log("[socket] Client connected:", socket.id, socket.userName);
+  socket.data.userId = socket.userId;
+  socket.data.username = socket.userName;
 
   socket.on("lobby-join", () => {
     registerLobbySocket(socket.id);
@@ -80,8 +134,12 @@ io.on("connection", (socket) => {
       const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : "";
       if (!roomId) return;
 
-      const userId = typeof payload.userId === "string" && payload.userId.trim() ? payload.userId.trim() : socket.id;
-      const username = typeof payload.username === "string" && payload.username.trim() ? payload.username.trim() : "Guest";
+      if (socket.data.joinedRoomId === roomId) {
+        return;
+      }
+
+      const userId = socket.userId || socket.id;
+      const username = socket.userName || "Student";
       const privacy = payload.privacy && typeof payload.privacy === "object" ? payload.privacy : {};
 
       const prevRoom = socket.data.roomId;
@@ -101,6 +159,7 @@ io.on("connection", (socket) => {
       socket.data.userId = userId;
       socket.data.username = username;
       socket.data.privacy = privacy;
+      socket.data.joinedRoomId = roomId;
 
       upsertRoomMember(roomId, {
         socketId: socket.id,
@@ -158,8 +217,8 @@ io.on("connection", (socket) => {
     try {
       const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
       if (!roomId) return;
-      const userId = socket.data.userId;
-      const userName = socket.data.username;
+      const userId = socket.userId || socket.data.userId;
+      const userName = socket.userName || socket.data.username;
       const todayMinutes = Math.max(0, Number(payload.todayMinutes) || 0);
       const sessionsToday = Math.max(0, Number(payload.sessionsToday) || 0);
 
@@ -169,6 +228,14 @@ io.on("connection", (socket) => {
         userName,
         deltaMinutes: todayMinutes,
         deltaSessions: sessionsToday,
+      });
+
+      io.to(roomId).emit("study-time-updated", {
+        roomId,
+        userId,
+        userName,
+        totalFocusMinutes: stats.totalFocusMinutes || 0,
+        sessionsCompleted: stats.sessionsCompleted || 0,
       });
 
       io.to(roomId).emit("study-time-update", {
@@ -193,15 +260,15 @@ io.on("connection", (socket) => {
       const sessionNumber = Math.max(1, Number(payload.sessionNumber) || 1);
       await upsertUserRoomStats({
         roomId,
-        userId: socket.data.userId,
-        userName: socket.data.username,
+        userId: socket.userId || socket.data.userId,
+        userName: socket.userName || socket.data.username,
         deltaMinutes: 25,
         deltaSessions: 1,
       });
       io.to(roomId).emit("session-complete", {
         roomId,
-        userId: socket.data.userId,
-        name: socket.data.username,
+        userId: socket.userId || socket.data.userId,
+        name: socket.userName || socket.data.username,
         sessionNumber,
       });
       const allStats = await getRoomStats(roomId);
@@ -219,8 +286,8 @@ io.on("connection", (socket) => {
     broadcastPresence(roomId);
     io.to(roomId).emit("user-status-update", {
       roomId,
-      userId: socket.data.userId,
-      name: socket.data.username,
+      userId: socket.userId || socket.data.userId,
+      name: socket.userName || socket.data.username,
       status,
     });
   });
@@ -248,8 +315,8 @@ io.on("connection", (socket) => {
     try {
       const message = await createChatMessage({
         roomId,
-        userId: socket.data.userId,
-        username: socket.data.username,
+        userId: socket.userId || socket.data.userId,
+        username: socket.userName || socket.data.username,
         text,
         type: payload.type === "system" ? "system" : "user",
       });
@@ -324,13 +391,13 @@ io.on("connection", (socket) => {
     const roomId = socket.data.roomId;
     if (typeof cb !== "function") return;
     if (!roomId) return cb({ members: [] });
-    cb({ members: getRoomMembersForClient(roomId, socket.id) });
+    cb({ members: dedupeMembersByUserId(getRoomMembersForClient(roomId, socket.id)) });
   });
 
   socket.on("disconnect", async () => {
     const roomId = socket.data.roomId;
-    const userId = socket.data.userId;
-    const username = socket.data.username;
+    const userId = socket.userId || socket.data.userId;
+    const username = socket.userName || socket.data.username;
 
     removeSocketEverywhere(socket.id);
     emitLobbyCount();

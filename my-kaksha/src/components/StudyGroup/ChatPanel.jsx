@@ -21,6 +21,16 @@ function normalizeIncoming(msg) {
   };
 }
 
+function dedupeMessages(rows) {
+  const seen = new Set();
+  return (rows || []).filter((row) => {
+    const key = String(row.id || row.timestamp || row.content || "");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPaused, pausedMessage, isActiveTab, onUnreadChange }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
@@ -39,7 +49,7 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
       try {
         const data = await fetchRoomMessages(roomId);
         if (cancelled) return;
-        const list = (data.messages || []).map(normalizeIncoming);
+        const list = dedupeMessages((data.messages || []).map(normalizeIncoming));
         setMessages(list);
         setHasOlder(list.length >= 50);
       } catch {
@@ -57,7 +67,7 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
 
     const onReceive = (incoming) => {
       const msg = normalizeIncoming(incoming);
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev) => (prev.some((existing) => existing.id === msg.id) ? prev : [...prev, msg]));
       if (!isActiveTab && msg.sender.userId !== meUserId) {
         onUnreadChange?.((v) => (v || 0) + 1);
       }
@@ -79,13 +89,14 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
 
     const onSystem = (notice) => {
       if (!notice?.text) return;
-      setMessages((prev) => [...prev, normalizeIncoming({
+      const systemMsg = normalizeIncoming({
         id: `sys-${Date.now()}-${Math.random()}`,
         sender: { userId: "system", name: "System" },
         content: notice.text,
         timestamp: notice.timestamp,
         type: "system",
-      })]);
+      });
+      setMessages((prev) => (prev.some((existing) => existing.id === systemMsg.id) ? prev : [...prev, systemMsg]));
     };
 
     socket.on("receive-message", onReceive);
@@ -116,11 +127,11 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
     setLoadingOlder(true);
     try {
       const data = await fetchRoomMessages(roomId, oldestTimestamp);
-      const older = (data.messages || []).map(normalizeIncoming);
+      const older = dedupeMessages((data.messages || []).map(normalizeIncoming));
       if (older.length === 0) {
         setHasOlder(false);
       } else {
-        setMessages((prev) => [...older, ...prev]);
+        setMessages((prev) => dedupeMessages([...older, ...prev]));
         if (older.length < 50) setHasOlder(false);
       }
     } finally {
@@ -167,7 +178,6 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
         }
         return prev.map((m) => (m.id === optimistic.id ? sent : m));
       });
-      socketRef.current?.emit("send-message", { roomId, text: value, type: "user" });
     } catch {
       setMessages((prev) => {
         if (retryId) {
@@ -202,10 +212,17 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
   }
 
   return (
-    <div>
+    <div className="sg2-chat-container">
       {chatPaused ? <div className="sg2-banner">💬 {pausedMessage}</div> : null}
       <div ref={boxRef} className="sg2-chat-box" onScroll={onScroll}>
         {loadingOlder ? <p className="sg2-soft-text">Loading older messages...</p> : null}
+
+        {messages.length === 0 && !loadingOlder ? (
+          <div className="sg2-chat-empty">
+            <div className="sg2-chat-empty-emoji" aria-hidden>💬</div>
+            <p className="sg2-chat-empty-title">No messages yet. Say hello! 👋</p>
+          </div>
+        ) : null}
 
         {messages.map((msg) => {
           const isMine = msg.sender.userId === meUserId;
@@ -220,11 +237,11 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
 
           return (
             <div key={msg.id} className={`sg2-message-row ${isMine ? "mine" : "other"}`}>
-              {!isMine ? <span className="sg2-avatar-stack" style={{ marginLeft: 0 }}>{msg.sender.name.slice(0, 1).toUpperCase()}</span> : null}
+              {!isMine ? <span className="sg2-avatar-stack sg2-avatar-lg" style={{ marginLeft: 0 }}>{msg.sender.name.slice(0, 1).toUpperCase()}</span> : null}
               <div className={`sg2-bubble ${isMine ? "mine" : "other"}`}>
                 {!isMine ? <strong>{msg.sender.name}</strong> : null}
                 <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
-                <small>{formatTs(msg.timestamp)}</small>
+                <small className="sg2-message-time">{formatTs(msg.timestamp)}</small>
                 {msg.pending ? <small className="sg2-soft-text">sending...</small> : null}
                 {msg.failed ? (
                   <button type="button" className="sg2-retry-btn" onClick={() => sendMessage(msg.content, msg.id)}>

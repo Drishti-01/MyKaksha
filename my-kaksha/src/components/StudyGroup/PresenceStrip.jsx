@@ -10,7 +10,7 @@ export default function PresenceStrip({ counts }) {
 
   return (
     <div className="sg2-presence-strip sg2-fade-in" aria-live="polite">
-      🎯 <strong>{focusing}</strong> focusing · ☕ <strong>{onBreak}</strong> on break · 👻 <strong>{away}</strong> away · 🟢 <strong>{online}</strong> online total
+      🎯 <strong>{focusing}</strong> focusing · ☕ <strong>{onBreak}</strong> on break · 💤 <strong>{away}</strong> away · 🟢 <strong>{online}</strong> online total
     </div>
   );
 }

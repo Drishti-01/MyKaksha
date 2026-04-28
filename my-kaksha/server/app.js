@@ -11,7 +11,7 @@ import { login, signup } from "./controllers/authController.js";
 import { validateLogin, validateSignup } from "./middleware/validation.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandlers.js";
 
-export function createApp() {
+export function createApp({ io } = {}) {
   const app = express();
 
   app.use(
@@ -22,6 +22,13 @@ export function createApp() {
   );
   app.use(express.json());
   app.use(cookieParser());
+
+  if (io) {
+    app.use((req, _res, next) => {
+      req.io = io;
+      next();
+    });
+  }
 
   app.get("/api/health", (_req, res) => {
     res.status(200).json({ ok: true });

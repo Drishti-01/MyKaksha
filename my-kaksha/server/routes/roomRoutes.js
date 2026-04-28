@@ -7,7 +7,9 @@ import {
   getMyRoomStatsController,
   getNotes,
   getRoom,
+  getRoomLeaderboard,
   getRoomStatsController,
+  getRoomStudyTimes,
   joinRoomByCode,
   leaveRoom,
   listMessages,
@@ -24,6 +26,8 @@ router.get("/", asyncHandler(listRooms));
 router.post("/", asyncHandler(createRoom));
 router.post("/join/:code", asyncHandler(joinRoomByCode));
 router.get("/:id", asyncHandler(getRoom));
+router.get("/:id/study-times", asyncHandler(getRoomStudyTimes));
+router.get("/:id/leaderboard", asyncHandler(getRoomLeaderboard));
 router.post("/:id/leave", asyncHandler(leaveRoom));
 router.get("/:id/messages", asyncHandler(listMessages));
 router.post("/:id/messages", asyncHandler(createMessage));

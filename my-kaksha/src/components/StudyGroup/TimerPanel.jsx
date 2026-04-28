@@ -1,5 +1,5 @@
 ﻿function pctToStrokeOffset(progress) {
-  const circumference = 2 * Math.PI * 62;
+  const circumference = 2 * Math.PI * 80;
   return circumference * (1 - progress);
 }
 
@@ -23,8 +23,10 @@ export default function TimerPanel({
   celebrate,
   lastActionReason,
 }) {
-  const circumference = 2 * Math.PI * 62;
+  const radius = 80;
+  const circumference = 2 * Math.PI * radius;
   const strokeOffset = pctToStrokeOffset(progress);
+  const ringColor = String(label || "").toLowerCase().includes("break") ? "#D97706" : "#4F46E5";
 
   return (
     <section className="sg2-panel" aria-label="Group sync timer">
@@ -47,13 +49,14 @@ export default function TimerPanel({
       ) : null}
 
       <div className="sg2-timer-ring-wrap">
-        <svg viewBox="0 0 160 160" className="sg2-timer-ring">
-          <circle cx="80" cy="80" r="62" className="sg2-timer-ring-bg" />
+        <svg viewBox="0 0 200 200" className="sg2-timer-ring">
+          <circle cx="100" cy="100" r={radius} className="sg2-timer-ring-bg" />
           <circle
-            cx="80"
-            cy="80"
-            r="62"
+            cx="100"
+            cy="100"
+            r={radius}
             className="sg2-timer-ring-fg"
+            style={{ stroke: ringColor }}
             strokeDasharray={circumference}
             strokeDashoffset={strokeOffset}
           />

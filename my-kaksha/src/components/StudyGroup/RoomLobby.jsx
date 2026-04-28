@@ -28,6 +28,7 @@ function formatRelative(iso) {
 export default function RoomLobby() {
   const navigate = useNavigate();
   const lobbySocketRef = useRef(null);
+  const lobbyJoinSentRef = useRef(false);
   const [rooms, setRooms] = useState([]);
   const [trending, setTrending] = useState([]);
   const [liveCount, setLiveCount] = useState(0);
@@ -62,12 +63,28 @@ export default function RoomLobby() {
   }, []);
 
   useEffect(() => {
-    const socket = io({ path: "/socket.io", transports: ["websocket", "polling"] });
+    const socket = io({
+      path: "/socket.io",
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+      auth: { token: localStorage.getItem("token") || "" },
+    });
     lobbySocketRef.current = socket;
+    lobbyJoinSentRef.current = false;
+
+    const emitLobbyJoin = () => {
+      if (lobbyJoinSentRef.current) return;
+      lobbyJoinSentRef.current = true;
+      socket.emit("lobby-join");
+    };
 
     socket.on("connect", () => {
       console.log("Socket: lobby connected");
-      socket.emit("lobby-join");
+      emitLobbyJoin();
+    });
+
+    socket.on("disconnect", () => {
+      lobbyJoinSentRef.current = false;
     });
 
     socket.on("lobby-presence", ({ count }) => {
@@ -78,9 +95,10 @@ export default function RoomLobby() {
       load();
     });
 
-    if (socket.connected) socket.emit("lobby-join");
+    if (socket.connected) emitLobbyJoin();
 
     return () => {
+      lobbyJoinSentRef.current = false;
       socket.emit("lobby-leave");
       socket.disconnect();
       lobbySocketRef.current = null;

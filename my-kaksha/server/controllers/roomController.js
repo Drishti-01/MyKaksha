@@ -17,6 +17,7 @@
   closeRoomSessionEntry,
 } from "../services/roomStore.js";
 import { createChatMessage, readRecentChatMessages } from "../services/chatStore.js";
+import RoomSession from "../models/RoomSession.js";
 import { getGlobalStudyingApproxCount, getLobbySocketCount, getVisibleOnlineCountForRoom } from "../services/studyPresenceRegistry.js";
 
 function ok(res, data, status = 200) {
@@ -25,6 +26,35 @@ function ok(res, data, status = 200) {
 
 function fail(res, status, message) {
   res.status(status).json({ success: false, message });
+}
+
+function todayKey(date = new Date()) {
+  return new Date(date).toISOString().slice(0, 10);
+}
+
+function mondayKey() {
+  const monday = new Date();
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+  return monday.toISOString().slice(0, 10);
+}
+
+function dedupeByUserId(rows) {
+  const seen = new Set();
+  return (rows || []).filter((row) => {
+    const key = String(row.userId || row.user?.id || "");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function canAccessRoom(room, userId) {
+  if (!room) return false;
+  if (room.type !== "private") return true;
+  const isMember = (room.members || []).some((m) => m.userId === userId);
+  const isCreator = room.createdBy?.userId === userId;
+  return isMember || isCreator;
 }
 
 function roomStatus(room, onlineCount) {
@@ -129,6 +159,64 @@ export async function getRoom(req, res) {
   });
 }
 
+export async function getRoomStudyTimes(req, res) {
+  const room = await findRoomById(req.params.id);
+  if (!room) return fail(res, 404, "Room not found");
+  if (!canAccessRoom(room, req.auth.user.id)) return fail(res, 403, "This is a private room");
+
+  const date = todayKey();
+  const sessions = await RoomSession.find({ roomId: room.id, date })
+    .sort({ totalFocusMinutes: -1, lastActive: -1 })
+    .lean();
+
+  ok(res, {
+    roomId: room.id,
+    date,
+    sessions: dedupeByUserId(sessions).map((session) => ({
+      ...session,
+      userId: String(session.userId),
+      totalFocusMinutes: Number(session.totalFocusMinutes ?? session.totalMinutes ?? 0),
+    })),
+  });
+}
+
+export async function getRoomLeaderboard(req, res) {
+  const room = await findRoomById(req.params.id);
+  if (!room) return fail(res, 404, "Room not found");
+  if (!canAccessRoom(room, req.auth.user.id)) return fail(res, 403, "This is a private room");
+
+  const monday = mondayKey();
+  const sessions = await RoomSession.find({ roomId: room.id, date: { $gte: monday } }).lean();
+
+  const grouped = {};
+  sessions.forEach((session) => {
+    const key = String(session.userId);
+    if (!grouped[key]) {
+      grouped[key] = {
+        userId: key,
+        userName: session.userName,
+        totalMinutes: 0,
+        sessionsCompleted: 0,
+        daysStudied: new Set(),
+      };
+    }
+    grouped[key].totalMinutes += Number(session.totalFocusMinutes ?? session.totalMinutes ?? 0);
+    grouped[key].sessionsCompleted += Number(session.sessionsCompleted || 0);
+    grouped[key].daysStudied.add(session.date);
+  });
+
+  const ranked = Object.values(grouped)
+    .map((entry) => ({
+      ...entry,
+      daysStudied: entry.daysStudied.size,
+      focusPoints: Math.round((entry.sessionsCompleted * 10) + (entry.totalMinutes / 5)),
+      isConsistent: entry.daysStudied.size >= 3,
+    }))
+    .sort((a, b) => b.totalMinutes - a.totalMinutes);
+
+  ok(res, { roomId: room.id, monday, leaderboard: ranked });
+}
+
 export async function joinRoomByCode(req, res) {
   const code = req.params.code;
   const room = await joinRoomByCodeForUser(req.auth.user.id, req.auth.user.name, code);
@@ -168,6 +256,7 @@ export async function createMessage(req, res) {
     type: req.body?.type === "system" ? "system" : "user",
   });
 
+  req.app.get("io")?.to(room.id).emit("receive-message", message);
   await markRoomActivity(room.id);
   ok(res, { message }, 201);
 }
@@ -202,14 +291,76 @@ export async function getMyRoomStatsController(req, res) {
 
 export async function trackSessionComplete(req, res) {
   const roomId = req.params.id;
+  const room = await findRoomById(roomId);
+  if (!room) return fail(res, 404, "Room not found");
+
+  const date = todayKey();
   const deltaSessions = Math.max(1, Number(req.body?.sessions) || 1);
-  const deltaMinutes = Math.max(0, Number(req.body?.minutes) || 25);
+  const deltaMinutes = Math.max(0, Number(req.body?.minutesStudied ?? req.body?.minutes) || 25);
+  const userId = req.auth.user.id;
+  const userName = req.auth.user.name;
+
+  const session = await RoomSession.findOneAndUpdate(
+    { roomId, userId, date },
+    {
+      $setOnInsert: {
+        roomId,
+        userId,
+        userName,
+        date,
+        joinedAt: new Date(),
+        leftAt: null,
+        totalFocusMinutes: 0,
+        totalMinutes: 0,
+        sessionsCompleted: 0,
+        lastActive: new Date(),
+      },
+      $inc: {
+        totalFocusMinutes: deltaMinutes,
+        totalMinutes: deltaMinutes,
+        sessionsCompleted: deltaSessions,
+      },
+      $set: {
+        userName,
+        lastActive: new Date(),
+      },
+    },
+    { upsert: true, new: true }
+  ).lean();
+
   const stats = await upsertUserRoomStats({
     roomId,
-    userId: req.auth.user.id,
-    userName: req.auth.user.name,
+    userId,
+    userName,
     deltaMinutes,
     deltaSessions,
   });
-  ok(res, { stats });
+
+  req.app.get("io")?.to(roomId).emit("study-time-updated", {
+    roomId,
+    userId: String(userId),
+    userName,
+    totalFocusMinutes: Number(session.totalFocusMinutes || 0),
+    sessionsCompleted: Number(session.sessionsCompleted || 0),
+  });
+
+  req.app.get("io")?.to(roomId).emit("session-complete", {
+    roomId,
+    userId: String(userId),
+    name: userName,
+    sessionNumber: Number(session.sessionsCompleted || deltaSessions || 1),
+  });
+
+  req.app.get("io")?.to(roomId).emit("study-time-update", {
+    roomId,
+    userId: String(userId),
+    name: userName,
+    todayMinutes: Number(session.totalFocusMinutes || 0),
+    sessionsToday: Number(session.sessionsCompleted || 0),
+  });
+
+  const roomStats = await getRoomStats(roomId);
+  req.app.get("io")?.to(roomId).emit("room-stats", { roomId, stats: roomStats });
+
+  ok(res, { session, stats });
 }

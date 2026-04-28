@@ -32,6 +32,10 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function todayKey(date = new Date()) {
+  return new Date(date).toISOString().slice(0, 10);
+}
+
 function startOfWeek(date = new Date()) {
   const d = new Date(date);
   const day = d.getDay();
@@ -361,36 +365,58 @@ export async function getRoomSharedNotes(roomId) {
 
 export async function createRoomSessionEntry({ roomId, userId, userName }) {
   const joinedAt = new Date();
+  const date = todayKey(joinedAt);
   const mongo = await isMongoUsable();
   if (mongo) {
-    const existing = await RoomSession.findOne({ roomId, userId, leftAt: null }).sort({ joinedAt: -1 }).lean();
-    if (existing) {
-      return existing;
-    }
-    return RoomSession.create({
-      roomId,
-      userId,
-      userName,
-      joinedAt,
-      leftAt: null,
-      totalMinutes: 0,
-      sessionsCompleted: 0,
-    });
+    return RoomSession.findOneAndUpdate(
+      { roomId, userId, date },
+      {
+        $setOnInsert: {
+          roomId,
+          userId,
+          userName,
+          date,
+          joinedAt,
+          leftAt: null,
+          totalFocusMinutes: 0,
+          totalMinutes: 0,
+          sessionsCompleted: 0,
+          lastActive: joinedAt,
+        },
+        $set: {
+          userName,
+          joinedAt,
+          leftAt: null,
+          lastActive: joinedAt,
+        },
+      },
+      { upsert: true, new: true }
+    ).lean();
   }
 
   const data = await readRoomSessionsFallback();
   data.sessions = Array.isArray(data.sessions) ? data.sessions : [];
-  const open = data.sessions.find((s) => s.roomId === roomId && s.userId === userId && !s.leftAt);
-  if (open) return open;
+  const existing = data.sessions.find((s) => s.roomId === roomId && s.userId === userId && s.date === date);
+  if (existing) {
+    existing.userName = userName;
+    existing.joinedAt = joinedAt.toISOString();
+    existing.leftAt = null;
+    existing.lastActive = joinedAt.toISOString();
+    await writeRoomSessionsFallback(data);
+    return existing;
+  }
   const row = {
     id: randomUUID(),
     roomId,
     userId,
     userName,
+    date,
     joinedAt: joinedAt.toISOString(),
     leftAt: null,
+    totalFocusMinutes: 0,
     totalMinutes: 0,
     sessionsCompleted: 0,
+    lastActive: joinedAt.toISOString(),
   };
   data.sessions.push(row);
   await writeRoomSessionsFallback(data);
@@ -399,30 +425,39 @@ export async function createRoomSessionEntry({ roomId, userId, userName }) {
 
 export async function closeRoomSessionEntry({ roomId, userId, extraCompletedSessions = 0 }) {
   const leftAt = new Date();
+  const date = todayKey(leftAt);
   const mongo = await isMongoUsable();
   if (mongo) {
-    const session = await RoomSession.findOne({ roomId, userId, leftAt: null }).sort({ joinedAt: -1 });
-    if (!session) {
-      return null;
-    }
-    const totalMinutes = minutesBetween(session.joinedAt, leftAt);
-    session.leftAt = leftAt;
-    session.totalMinutes = totalMinutes;
-    session.sessionsCompleted = (session.sessionsCompleted || 0) + (Number(extraCompletedSessions) || 0);
-    await session.save();
-    return session.toObject();
+    const session = await RoomSession.findOne({ roomId, userId, date, leftAt: null }).lean();
+    if (!session) return null;
+    const segmentMinutes = session.joinedAt ? minutesBetween(session.joinedAt, leftAt) : 0;
+    const updated = await RoomSession.findOneAndUpdate(
+      { roomId, userId, date },
+      {
+        $set: { leftAt, lastActive: leftAt },
+        $inc: {
+          totalMinutes: segmentMinutes,
+          totalFocusMinutes: segmentMinutes,
+          sessionsCompleted: Math.max(0, Number(extraCompletedSessions) || 0),
+        },
+      },
+      { new: true }
+    ).lean();
+    return updated;
   }
 
   const data = await readRoomSessionsFallback();
   data.sessions = Array.isArray(data.sessions) ? data.sessions : [];
-  const idx = [...data.sessions].reverse().findIndex((s) => s.roomId === roomId && s.userId === userId && !s.leftAt);
-  if (idx === -1) return null;
-  const actualIdx = data.sessions.length - 1 - idx;
-  const row = data.sessions[actualIdx];
+  const actualIdx = [...data.sessions].reverse().findIndex((s) => s.roomId === roomId && s.userId === userId && s.date === date && !s.leftAt);
+  if (actualIdx === -1) return null;
+  const row = data.sessions[data.sessions.length - 1 - actualIdx];
   row.leftAt = leftAt.toISOString();
-  row.totalMinutes = minutesBetween(row.joinedAt, row.leftAt);
+  const segmentMinutes = minutesBetween(row.joinedAt, row.leftAt);
+  row.totalMinutes = (row.totalMinutes || 0) + segmentMinutes;
+  row.totalFocusMinutes = (row.totalFocusMinutes || 0) + segmentMinutes;
   row.sessionsCompleted = (row.sessionsCompleted || 0) + (Number(extraCompletedSessions) || 0);
-  data.sessions[actualIdx] = row;
+  row.lastActive = leftAt.toISOString();
+  data.sessions[data.sessions.length - 1 - actualIdx] = row;
   await writeRoomSessionsFallback(data);
   return row;
 }

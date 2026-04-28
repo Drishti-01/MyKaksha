@@ -18,9 +18,14 @@ function statusDot(status) {
   return "#9ca3af";
 }
 
-export default function MembersPanel({ members, roomCode, meName, statsByUser }) {
+export default function MembersPanel({ members, roomCode, meName, statsByUser, maxFocus = 1 }) {
   if (!members || members.length === 0) {
-    return <p className="sg2-soft-text">You&apos;re the first one here. Invite friends!</p>;
+    return (
+      <div className="sg2-empty-room">
+        <p className="sg2-soft-text" style={{ margin: 0 }}>You&apos;re the first one here. Invite friends!</p>
+        <div className="sg2-room-code-hero">Room code: <strong>{roomCode}</strong></div>
+      </div>
+    );
   }
 
   return (
@@ -38,16 +43,21 @@ export default function MembersPanel({ members, roomCode, meName, statsByUser })
           return (
             <li key={m.socketId || `${m.userId}-${m.name}`} className="sg2-member-row">
               <span className="sg2-status-dot" style={{ background: statusDot(m.status) }} />
-              <div className="sg2-avatar-stack" style={{ marginLeft: 0 }}>{String(m.name || "?").slice(0, 1).toUpperCase()}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, color: "#4a3629" }}>
-                  {isMe ? `You (${m.name})` : m.name}
+              <div className="sg2-avatar-stack sg2-avatar-lg" style={{ marginLeft: 0 }}>{String(m.name || "?").slice(0, 1).toUpperCase()}</div>
+              <div className="sg2-member-body">
+                <div className="sg2-member-topline">
+                  <div style={{ fontWeight: 700, color: "#4a3629" }}>
+                    {isMe ? `You (${m.name})` : m.name}
+                  </div>
+                  <span className={badgeClass(m.status)} style={{ fontSize: "0.72rem", padding: "4px 8px", borderRadius: 999 }}>
+                    {badgeLabel(m.status)}
+                  </span>
                 </div>
-                <span className={badgeClass(m.status)} style={{ fontSize: "0.72rem", padding: "4px 8px", borderRadius: 999 }}>
-                  {badgeLabel(m.status)}
-                </span>
+                <div className="sg2-progress-rail" style={{ marginTop: 6 }}>
+                  <div className="sg2-progress-fill" style={{ width: `${Math.max(8, Math.round((focusMin / Math.max(1, maxFocus)) * 100))}%` }} />
+                </div>
               </div>
-              <strong style={{ color: "#6e5644", fontSize: "0.86rem" }}>{focusMin} min</strong>
+              <strong className="sg2-study-minutes">{focusMin} min</strong>
             </li>
           );
         })}

@@ -14,6 +14,16 @@ import PrivacySettings from "./PrivacySettings";
 import SharedNotes from "./SharedNotes";
 import TimerPanel from "./TimerPanel";
 
+function dedupeByUserId(rows) {
+  const seen = new Set();
+  return (rows || []).filter((row) => {
+    const key = String(row?.userId || "");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function stripCounts(members) {
   let focusing = 0;
   let onBreak = 0;
@@ -51,7 +61,10 @@ export default function RoomView() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const socketRef = useRef(null);
+  const joinSentRef = useRef(false);
   const [members, setMembers] = useState([]);
+  const [studyTimes, setStudyTimes] = useState([]);
+  const [weeklyLeaderboard, setWeeklyLeaderboard] = useState([]);
   const [tab, setTab] = useState("chat");
   const [timerScope, setTimerScope] = useState("personal");
   const [privacyOpen, setPrivacyOpen] = useState(false);
@@ -66,50 +79,40 @@ export default function RoomView() {
 
   const {
     room,
-    leaderboard,
     roomStats,
-    myStats,
     loading,
     error,
-    reload,
     leaveRoom,
-    setLeaderboardRows,
     setRoomStatsRows,
     setMyStats,
   } = useRoom(roomId);
 
-  const statsByUser = useMemo(() => toStatsMap(roomStats), [roomStats]);
+  const statsByUser = useMemo(() => toStatsMap(dedupeByUserId(studyTimes)), [studyTimes]);
+  const roomStatsByUser = useMemo(() => toStatsMap(dedupeByUserId(roomStats)), [roomStats]);
+
+  const todayMinutesForMe = Number(statsByUser[userId]?.totalFocusMinutes || 0);
 
   const onSessionComplete = useCallback(async ({ minutes = 25, sessions = 1 }) => {
     try {
       const data = await recordSessionCompleteApi(roomId, minutes, sessions);
-      if (data?.stats) {
-        setMyStats(data.stats);
-      }
-      socketRef.current?.emit("session-complete", { roomId, sessionNumber: sessions });
-      socketRef.current?.emit("study-time-update", {
-        roomId,
-        userId,
-        name: displayName,
-        todayMinutes: minutes,
-        sessionsToday: sessions,
-      });
-      const roomStatsPayload = await new Promise((resolve) => {
-        socketRef.current?.emit("room-stats-request", { roomId }, (resp) => resolve(resp));
-      });
-      if (roomStatsPayload?.success && Array.isArray(roomStatsPayload.stats)) {
-        setRoomStatsRows(roomStatsPayload.stats);
-        setLeaderboardRows(roomStatsPayload.stats.map((r) => ({
-          userId: r.userId,
-          userName: r.userName,
-          points: r.focusPoints || 0,
-          streakDays: r.streakDays || 0,
-        })));
+      if (data?.session) {
+        setStudyTimes((prev) => {
+          const next = prev.filter((row) => String(row.userId) !== String(userId));
+          next.push({
+            userId,
+            userName: displayName,
+            totalFocusMinutes: Number(data.session.totalFocusMinutes || 0),
+            sessionsCompleted: Number(data.session.sessionsCompleted || 0),
+            lastActive: data.session.lastActive,
+            date: data.session.date,
+          });
+          return dedupeByUserId(next).sort((a, b) => (b.totalFocusMinutes || 0) - (a.totalFocusMinutes || 0));
+        });
       }
     } catch {
       /* non-blocking */
     }
-  }, [roomId, userId, displayName, setMyStats, setRoomStatsRows, setLeaderboardRows]);
+  }, [roomId, userId, displayName]);
 
   const emitStatus = useCallback((status) => {
     const finalStatus = !settings.showOnline && status === "online" ? "invisible" : status;
@@ -134,35 +137,72 @@ export default function RoomView() {
     if (!roomId) return undefined;
     rememberRoom(roomId, room?.name);
 
-    const socket = io({ path: "/socket.io", transports: ["websocket", "polling"], reconnection: true });
+    const socket = io({
+      path: "/socket.io",
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      withCredentials: true,
+      auth: { token: localStorage.getItem("token") || "" },
+    });
     socketRef.current = socket;
+    joinSentRef.current = false;
+
+    const loadStudyTimes = async () => {
+      try {
+        const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/study-times`, { credentials: "include" });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.success === false) return;
+        const rows = Array.isArray(payload?.data?.sessions) ? payload.data.sessions : Array.isArray(payload?.sessions) ? payload.sessions : [];
+        const unique = dedupeByUserId(rows).map((row) => ({
+          ...row,
+          userId: String(row.userId),
+          totalFocusMinutes: Number(row.totalFocusMinutes ?? row.totalMinutes ?? 0),
+        })).sort((a, b) => (b.totalFocusMinutes || 0) - (a.totalFocusMinutes || 0));
+        setStudyTimes(unique);
+      } catch {
+        setStudyTimes([]);
+      }
+    };
+
+    const loadLeaderboard = async () => {
+      try {
+        const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/leaderboard`, { credentials: "include" });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.success === false) return;
+        const rows = Array.isArray(payload?.data?.leaderboard) ? payload.data.leaderboard : Array.isArray(payload?.leaderboard) ? payload.leaderboard : [];
+        setWeeklyLeaderboard(rows);
+      } catch {
+        setWeeklyLeaderboard([]);
+      }
+    };
 
     const emitJoin = () => {
+      if (joinSentRef.current) return;
+      joinSentRef.current = true;
       socket.emit("join-room", {
         roomId,
-        userId,
-        username: displayName,
         privacy: privacyPayload,
       });
       socket.emit("get-room-members", (res) => {
-        if (Array.isArray(res?.members)) setMembers(res.members);
+        if (Array.isArray(res?.members)) setMembers(dedupeByUserId(res.members));
       });
       socket.emit("room-stats-request", { roomId }, (res) => {
         if (res?.success && Array.isArray(res.stats)) {
           setRoomStatsRows(res.stats);
-          setLeaderboardRows(res.stats.map((r) => ({
-            userId: r.userId,
-            userName: r.userName,
-            points: r.focusPoints || 0,
-            streakDays: r.streakDays || 0,
-          })));
         }
       });
+      loadStudyTimes();
+      loadLeaderboard();
     };
 
     socket.on("connect", () => {
       setReconnecting(false);
       emitJoin();
+    });
+
+    socket.on("disconnect", () => {
+      joinSentRef.current = false;
+      setReconnecting(true);
     });
 
     socket.io.on("reconnect_attempt", () => {
@@ -171,18 +211,26 @@ export default function RoomView() {
 
     socket.on("room-members-update", (payload) => {
       if (payload?.roomId !== roomId) return;
-      setMembers(Array.isArray(payload.members) ? payload.members : []);
+      setMembers(dedupeByUserId(Array.isArray(payload.members) ? payload.members : []));
+    });
+
+    socket.on("study-time-updated", (payload) => {
+      if (payload?.roomId !== roomId) return;
+      setStudyTimes((prev) => {
+        const next = prev.filter((row) => String(row.userId) !== String(payload.userId));
+        next.push({
+          userId: String(payload.userId),
+          userName: payload.userName,
+          totalFocusMinutes: Number(payload.totalFocusMinutes || 0),
+          sessionsCompleted: Number(payload.sessionsCompleted || 0),
+        });
+        return dedupeByUserId(next).sort((a, b) => (b.totalFocusMinutes || 0) - (a.totalFocusMinutes || 0));
+      });
     });
 
     socket.on("room-stats", (payload) => {
       if (payload?.roomId !== roomId || !Array.isArray(payload.stats)) return;
       setRoomStatsRows(payload.stats);
-      setLeaderboardRows(payload.stats.map((r) => ({
-        userId: r.userId,
-        userName: r.userName,
-        points: r.focusPoints || 0,
-        streakDays: r.streakDays || 0,
-      })));
       const mine = payload.stats.find((s) => s.userId === userId);
       if (mine) setMyStats(mine);
     });
@@ -190,10 +238,11 @@ export default function RoomView() {
     if (socket.connected) emitJoin();
 
     return () => {
+      joinSentRef.current = false;
       socket.disconnect();
       leaveRoom().catch(() => {});
     };
-  }, [roomId, userId, displayName, privacyPayload, leaveRoom, setRoomStatsRows, setLeaderboardRows, setMyStats, room?.name]);
+  }, [roomId, privacyPayload, leaveRoom, setRoomStatsRows, setMyStats, room?.name, userId, displayName]);
 
   useEffect(() => {
     if (tab === "chat") {
@@ -202,7 +251,7 @@ export default function RoomView() {
   }, [tab]);
 
   const membersStudyRows = useMemo(() => {
-    const enriched = (members || []).map((m) => {
+    const enriched = dedupeByUserId(members).map((m) => {
       const s = statsByUser[m.userId] || {};
       return {
         ...m,
@@ -237,10 +286,26 @@ export default function RoomView() {
   );
 
   const accent = roomAccent(room.name);
-  const presenceCounts = stripCounts(members);
+  const visibleMembers = dedupeByUserId(members);
+  const presenceCounts = stripCounts(visibleMembers);
+  const leaderboardRows = weeklyLeaderboard.length > 0
+    ? weeklyLeaderboard.map((row) => ({
+        userId: row.userId,
+        userName: row.userName,
+        points: row.focusPoints || Math.round((Number(row.sessionsCompleted || 0) * 10) + (Number(row.totalMinutes || 0) / 5)),
+        streakDays: row.daysStudied || 0,
+      }))
+    : roomStatsByUser && Object.keys(roomStatsByUser).length > 0
+      ? Object.values(roomStatsByUser).map((row) => ({
+          userId: row.userId,
+          userName: row.userName,
+          points: row.focusPoints || 0,
+          streakDays: row.streakDays || 0,
+        }))
+      : [];
 
   return (
-    <div>
+    <div className="sg2-room-page">
       {reconnecting ? <div className="sg2-banner">Reconnecting...</div> : null}
 
       <div className="sg2-topbar sg2-room-topbar">
@@ -257,7 +322,7 @@ export default function RoomView() {
 
         <div style={{ display: "grid", justifyItems: "end", gap: 8 }}>
           <div className="sg2-inline-row" style={{ gap: 6 }}>
-            {(members || []).slice(0, 5).map((m) => (
+            {visibleMembers.slice(0, 5).map((m) => (
               <span key={`${m.userId}-${m.name}`} className="sg2-avatar-stack" title={m.name}>{String(m.name || "?").slice(0, 1).toUpperCase()}</span>
             ))}
             <span className="sg2-badge">{presenceCounts.online + presenceCounts.focusing + presenceCounts.onBreak + presenceCounts.away} online</span>
@@ -273,7 +338,7 @@ export default function RoomView() {
       </div>
 
       <div className="sg2-room-view">
-        <div>
+        <div className="sg2-left-column">
           <TimerPanel
             timerScope={timerScope}
             onTimerScopeChange={setTimerScope}
@@ -287,7 +352,7 @@ export default function RoomView() {
             onSwitchPhase={timer.switchPhase}
             focusStyle={room.focusStyle}
             progress={timer.progress}
-            personalTodayMinutes={myStats?.totalFocusMinutes || 0}
+            personalTodayMinutes={todayMinutesForMe}
             groupStartedBy={timer.groupStartedBy}
             canControlGroup={timer.canControlGroup}
             groupDeniedMessage={timer.groupDeniedMessage}
@@ -297,17 +362,20 @@ export default function RoomView() {
 
           <section className="sg2-panel" style={{ marginTop: 16 }}>
             <h3 className="sg2-subtitle">Members&apos; Study Time Today</h3>
-            <ul className="sg2-clean-list" style={{ display: "grid", gap: 8, marginTop: 10 }}>
+            <ul className="sg2-clean-list" style={{ display: "grid", gap: 10, marginTop: 10 }}>
               {membersStudyRows.rows.map((m) => {
                 const pct = Math.round(((m.todayMinutes || 0) / membersStudyRows.max) * 100);
                 return (
                   <li key={`${m.userId}-${m.name}`} className="sg2-study-row">
-                    <span className="sg2-avatar-stack" style={{ marginLeft: 0 }}>{String(m.name).slice(0, 1).toUpperCase()}</span>
-                    <div style={{ flex: 1 }}>
-                      <div className="sg2-inline-row"><strong>{m.name}</strong><span className={`sg2-status-chip ${m.status || "online"}`}>{m.status || "online"}</span></div>
+                    <span className="sg2-avatar-stack sg2-avatar-lg" style={{ marginLeft: 0 }}>{String(m.name).slice(0, 1).toUpperCase()}</span>
+                    <div className="sg2-study-main">
+                      <div className="sg2-inline-row sg2-study-head">
+                        <strong>{m.isSelf ? `You (${m.name})` : m.name}</strong>
+                        <span className={`sg2-status-chip ${m.status || "online"}`}>{m.status || "online"}</span>
+                      </div>
                       <div className="sg2-progress-rail" style={{ marginTop: 4 }}><div className="sg2-progress-fill" style={{ width: `${pct}%` }} /></div>
                     </div>
-                    <strong>{m.todayMinutes || 0} min</strong>
+                    <strong className="sg2-study-minutes">{m.todayMinutes || 0} min</strong>
                   </li>
                 );
               })}
@@ -317,7 +385,8 @@ export default function RoomView() {
           <SharedNotes roomId={roomId} userId={userId} socketRef={socketRef} />
         </div>
 
-        <div className="sg2-panel">
+        <div className="sg2-panel sg2-right-panel">
+          <div className="sg2-right-content">
           <div className="sg2-tabs" role="tablist">
             <button type="button" className={`sg2-tab ${tab === "chat" ? "active" : ""}`} onClick={() => setTab("chat")}>
               Chat {unreadChat > 0 && tab !== "chat" ? <span className="sg2-unread">{unreadChat}</span> : null}
@@ -326,20 +395,23 @@ export default function RoomView() {
             <button type="button" className={`sg2-tab ${tab === "leaderboard" ? "active" : ""}`} onClick={() => setTab("leaderboard")}>Leaderboard</button>
           </div>
 
-          {tab === "chat" ? (
-            <ChatPanel
-              roomId={roomId}
-              socketRef={socketRef}
-              meUserId={userId}
-              meName={displayName}
-              chatPaused={chatPaused}
-              pausedMessage="Chat paused during focus session"
-              isActiveTab={tab === "chat"}
-              onUnreadChange={setUnreadChat}
-            />
-          ) : null}
-          {tab === "members" ? <MembersPanel members={members} roomCode={room.code} meName={displayName} statsByUser={statsByUser} /> : null}
-          {tab === "leaderboard" ? <LeaderboardPanel rows={leaderboard} myUserId={userId} /> : null}
+          <div className="sg2-right-body">
+            {tab === "chat" ? (
+              <ChatPanel
+                roomId={roomId}
+                socketRef={socketRef}
+                meUserId={userId}
+                meName={displayName}
+                chatPaused={chatPaused}
+                pausedMessage="Chat paused during focus session"
+                isActiveTab={tab === "chat"}
+                onUnreadChange={setUnreadChat}
+              />
+            ) : null}
+            {tab === "members" ? <MembersPanel members={membersStudyRows.rows} roomCode={room.code} meName={displayName} statsByUser={statsByUser} maxFocus={membersStudyRows.max} /> : null}
+            {tab === "leaderboard" ? <LeaderboardPanel rows={leaderboardRows} myUserId={userId} /> : null}
+          </div>
+          </div>
 
           <PresenceStrip counts={presenceCounts} />
         </div>

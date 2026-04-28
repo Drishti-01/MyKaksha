@@ -94,6 +94,20 @@ export async function fetchRoomStatsApi(roomId) {
   return parseJson(response);
 }
 
+export async function fetchRoomStudyTimesApi(roomId) {
+  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/study-times`, {
+    credentials: "include",
+  });
+  return parseJson(response);
+}
+
+export async function fetchRoomLeaderboardApi(roomId) {
+  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/leaderboard`, {
+    credentials: "include",
+  });
+  return parseJson(response);
+}
+
 export async function fetchMyRoomStatsApi(roomId) {
   const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/my-stats`, {
     credentials: "include",
@@ -106,7 +120,7 @@ export async function recordSessionCompleteApi(roomId, minutes = 25, sessions = 
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ minutes, sessions }),
+    body: JSON.stringify({ minutesStudied: minutes, sessions }),
   });
   return parseJson(response);
 }
