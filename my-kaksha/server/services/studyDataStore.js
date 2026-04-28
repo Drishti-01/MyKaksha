@@ -1,4 +1,6 @@
-import { readJsonFile, resolveDataFile, writeJsonFile } from "./fileStore.js";
+import StudyData from "../models/StudyData.js";
+import { ensureDatabaseConnection } from "../config/database.js";
+import { readJsonFile, resolveDataFile } from "./fileStore.js";
 
 export const DEFAULT_STUDY_DATA = {
   goals: [],
@@ -15,6 +17,15 @@ export function normalizeStudyData(payload = {}) {
     goalStats: payload.goalStats && typeof payload.goalStats === "object" ? payload.goalStats : {},
     tasks: Array.isArray(payload.tasks) ? payload.tasks : [],
     taskEvents: payload.taskEvents && typeof payload.taskEvents === "object" ? payload.taskEvents : {},
+  };
+}
+
+function createDefaultStudyData() {
+  return {
+    goals: [],
+    goalStats: {},
+    tasks: [],
+    taskEvents: {},
   };
 }
 
@@ -44,27 +55,53 @@ function normalizeStudyContainer(payload) {
 }
 
 export async function readStudyDataForUser(userId) {
+  await ensureDatabaseConnection();
+
+  const existingRecord = await StudyData.findOne({ userId }).lean();
+  if (existingRecord) {
+    return normalizeStudyData(existingRecord.data);
+  }
+
   const payload = await readJsonFile(studyDataFile, { ...DEFAULT_STUDY_DATA });
+  const legacyData = isLegacyStudyPayload(payload)
+    ? normalizeStudyData(payload)
+    : normalizeStudyData(normalizeStudyContainer(payload).users[userId] ?? normalizeStudyContainer(payload).legacyShared);
 
-  if (isLegacyStudyPayload(payload)) {
-    return normalizeStudyData(payload);
+  const hasLegacyData =
+    legacyData.goals.length > 0 ||
+    legacyData.tasks.length > 0 ||
+    Object.keys(legacyData.goalStats).length > 0 ||
+    Object.keys(legacyData.taskEvents).length > 0;
+
+  if (hasLegacyData) {
+    await StudyData.create({
+      userId,
+      data: legacyData,
+    });
+    return legacyData;
   }
 
-  const container = normalizeStudyContainer(payload);
-  const perUserData = container.users[userId];
-  if (perUserData) {
-    return normalizeStudyData(perUserData);
-  }
-
-  return normalizeStudyData(container.legacyShared);
+  const emptyData = createDefaultStudyData();
+  await StudyData.create({
+    userId,
+    data: emptyData,
+  });
+  return emptyData;
 }
 
 export async function writeStudyDataForUser(userId, payload) {
-  const existing = await readJsonFile(studyDataFile, { users: {}, legacyShared: { ...DEFAULT_STUDY_DATA } });
-  const container = normalizeStudyContainer(existing);
+  await ensureDatabaseConnection();
 
-  container.users[userId] = normalizeStudyData(payload);
-  await writeJsonFile(studyDataFile, container);
+  const normalizedData = normalizeStudyData(payload);
+  const updatedRecord = await StudyData.findOneAndUpdate(
+    { userId },
+    { $set: { data: normalizedData } },
+    {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true,
+    }
+  ).lean();
 
-  return container.users[userId];
+  return normalizeStudyData(updatedRecord?.data);
 }

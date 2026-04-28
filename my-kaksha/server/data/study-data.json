@@ -211,8 +211,25 @@
       }
     },
     "69ef97cdddddec13977e01ed": {
-      "goals": [],
-      "goalStats": {},
+      "goals": [
+        {
+          "id": 1777364617789,
+          "title": "maths",
+          "minutes": 25
+        }
+      ],
+      "goalStats": {
+        "1777364617789": {
+          "id": 1777364617789,
+          "title": "maths",
+          "targetMinutes": 25,
+          "sessions": 0,
+          "totalSeconds": 123,
+          "dailySeconds": {
+            "2026-04-28": 123
+          }
+        }
+      },
       "tasks": [
         {
           "id": 1777312721463,

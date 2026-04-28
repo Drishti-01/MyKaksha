@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchStudyData } from "./api/studyData";
 import { useAuth } from "./auth/useAuth";
@@ -331,8 +331,18 @@ function formatDuration(totalSeconds) {
 }
 
 function shortDuration(totalSeconds) {
+  if (totalSeconds < 60) {
+    return `${Math.max(0, Math.floor(totalSeconds))}s`;
+  }
+
   const mins = Math.floor(totalSeconds / 60);
-  return `${mins}m`;
+  if (mins < 60) {
+    return `${mins}m`;
+  }
+
+  const hours = Math.floor(mins / 60);
+  const remainingMins = mins % 60;
+  return remainingMins > 0 ? `${hours}h ${remainingMins}m` : `${hours}h`;
 }
 
 const navItems = ["Dashboard", "Analytics", "Projects", "Study Group"];
@@ -340,8 +350,11 @@ const navItems = ["Dashboard", "Analytics", "Projects", "Study Group"];
 export default function Analytics() {
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
+  const isMountedRef = useRef(true);
   const [collapsed, setCollapsed] = useSidebarState();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [studyData, setStudyData] = useState({
     goals: [],
     goalStats: {},
@@ -351,25 +364,49 @@ export default function Analytics() {
   const [windowSize, setWindowSize] = useState(7);
   const [chartMode, setChartMode] = useState("focus");
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadData() {
-      try {
-        const data = await fetchStudyData();
-        if (!mounted) return;
-        setStudyData(data);
-      } catch {
-        if (!mounted) return;
-        setStudyData({ goals: [], goalStats: {}, tasks: [], taskEvents: {} });
-      } finally {
-        if (mounted) setLoading(false);
-      }
+  async function loadData({ showLoader = false } = {}) {
+    if (showLoader) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
     }
 
-    loadData();
+    try {
+      const data = await fetchStudyData();
+      if (!isMountedRef.current) return;
+      setStudyData(data);
+      setLoadError("");
+    } catch {
+      if (!isMountedRef.current) return;
+      setStudyData({ goals: [], goalStats: {}, tasks: [], taskEvents: {} });
+      setLoadError("Unable to load your analytics right now. Please try refreshing.");
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  }
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    function handleFocus() {
+      if (!isMountedRef.current) return;
+      loadData();
+    }
+
+    loadData({ showLoader: true });
+    globalThis.addEventListener("focus", handleFocus);
+    const refreshTimer = globalThis.setInterval(() => {
+      if (!isMountedRef.current) return;
+      loadData();
+    }, 5000);
+
     return () => {
-      mounted = false;
+      isMountedRef.current = false;
+      globalThis.removeEventListener("focus", handleFocus);
+      globalThis.clearInterval(refreshTimer);
     };
   }, []);
 
@@ -505,6 +542,9 @@ export default function Analytics() {
               <button className={`a-chip ${chartMode === "focus" ? "active" : ""}`} onClick={() => setChartMode("focus")}>Focus</button>
               <button className={`a-chip ${chartMode === "sessions" ? "active" : ""}`} onClick={() => setChartMode("sessions")}>Sessions</button>
               <button className={`a-chip ${chartMode === "tasks" ? "active" : ""}`} onClick={() => setChartMode("tasks")}>Tasks</button>
+              <button className="a-chip" onClick={() => loadData()} disabled={refreshing}>
+                {refreshing ? "Refreshing..." : "Refresh data"}
+              </button>
             </div>
           </section>
 
@@ -512,6 +552,7 @@ export default function Analytics() {
             <p className="a-empty">Loading analytics...</p>
           ) : (
             <>
+              {loadError ? <p className="a-empty">{loadError}</p> : null}
               <section className="a-grid-main">
                 <article className="a-card">
                   <h2 className="a-card-title">Trend Graph</h2>
