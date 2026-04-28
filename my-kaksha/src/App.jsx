@@ -1,7 +1,9 @@
 import { Routes, Route, useNavigate } from "react-router-dom";
 import Landing from "./components/landing";
 import Dashboard from "./Dashboard";
-import StudyGroupPage from "./StudyGroup";
+import StudyGroupLayout from "./components/StudyGroup/StudyGroupLayout";
+import RoomLobby from "./components/StudyGroup/RoomLobby";
+import RoomView from "./components/StudyGroup/RoomView";
 import ProjectTracker from "./components/ProjectTracker";
 import Analytics from "./Analytics";
 import SignupPage from "./SignupPage";
@@ -45,10 +47,13 @@ function App() {
         path="/study-group"
         element={
           <ProtectedRoute>
-            <StudyGroupPage />
+            <StudyGroupLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<RoomLobby />} />
+        <Route path=":roomId" element={<RoomView />} />
+      </Route>
       <Route
         path="/projects"
         element={

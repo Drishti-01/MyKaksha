@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { fetchStudyData } from "./api/studyData";
 import { useAuth } from "./auth/useAuth";
 import AppSidebar from "./components/AppSidebar";
+import EmptyStatePrompt from "./components/Analytics/EmptyStatePrompt";
+import QuickInsights from "./components/Analytics/QuickInsights";
+import StreakTracker from "./components/Analytics/StreakTracker";
 import useSidebarState from "./components/useSidebarState";
 
 const css = `
@@ -175,9 +178,20 @@ const css = `
     max-width: 28px;
     border-radius: 8px 8px 3px 3px;
     background: linear-gradient(180deg, #8b6f5e, #c8b6a6);
-    min-height: 4px;
+    min-height: 2px;
     transform-origin: bottom;
     animation: rise 0.7s ease both;
+    cursor: help;
+  }
+  .a-bar.placeholder {
+    background: repeating-linear-gradient(
+      180deg,
+      #e5d8cd 0px,
+      #e5d8cd 3px,
+      #f5efe6 3px,
+      #f5efe6 6px
+    );
+    opacity: 0.85;
   }
   .a-bar-label { font-size: 0.72rem; color: #8b6f5e; font-weight: 600; }
   .a-bar-value { font-size: 0.68rem; color: #5a4a3a; }
@@ -212,6 +226,9 @@ const css = `
     background: conic-gradient(#8b6f5e var(--percent), #eed6c4 0);
     transition: background 0.5s ease;
     animation: pulseRing 3.2s ease-in-out infinite;
+  }
+  .a-donut.spin-in {
+    animation: donutIn 0.85s ease-out both, pulseRing 3.2s ease-in-out infinite;
   }
   .a-donut::before {
     content: "";
@@ -283,6 +300,20 @@ const css = `
     0%,100% { box-shadow: 0 0 0 0 rgba(139,111,94,0.14); }
     50% { box-shadow: 0 0 0 10px rgba(139,111,94,0.04); }
   }
+  @keyframes donutIn {
+    from { transform: rotate(-85deg) scale(0.88); opacity: 0.35; }
+    to { transform: rotate(0deg) scale(1); opacity: 1; }
+  }
+
+  .a-stat-card {
+    position: relative;
+    border-left: 4px solid #8b6f5e;
+    padding-left: 10px;
+  }
+  .a-stat-card.s2 { border-left-color: #6366f1; }
+  .a-stat-card.s3 { border-left-color: #059669; }
+  .a-stat-card.s4 { border-left-color: #d97706; }
+  .a-stat-ico { font-size: 1.1rem; margin-bottom: 4px; }
 
   @media (max-width: 1050px) {
     .a-grid-main { grid-template-columns: 1fr; }
@@ -333,6 +364,28 @@ function formatDuration(totalSeconds) {
 function shortDuration(totalSeconds) {
   const mins = Math.floor(totalSeconds / 60);
   return `${mins}m`;
+}
+
+function AnimatedStat({ value }) {
+  const num = typeof value === "number" && Number.isFinite(value) ? Math.round(value) : 0;
+  const [shown, setShown] = useState(0);
+
+  useEffect(() => {
+    setShown(0);
+    if (num === 0) return undefined;
+    let raf;
+    const start = performance.now();
+    const dur = 650;
+    function tick(now) {
+      const p = Math.min(1, (now - start) / dur);
+      setShown(Math.round(num * p));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [num]);
+
+  return shown;
 }
 
 const navItems = ["Dashboard", "Analytics", "Projects", "Study Group"];
@@ -436,6 +489,11 @@ export default function Analytics() {
     [chartValues]
   );
 
+  const chartAllZero = useMemo(
+    () => chartValues.length > 0 && chartValues.every((item) => Number(item.value) === 0),
+    [chartValues]
+  );
+
   const topGoal = rows[0] ?? null;
   const topGoalPercent = totalSeconds > 0
     ? Math.round(((topGoal?.totalSeconds ?? 0) / totalSeconds) * 100)
@@ -521,16 +579,33 @@ export default function Analytics() {
 
                   <div className="a-chart-wrap" style={{ "--count": chartValues.length }}>
                     {chartValues.map((item, idx) => {
-                      const barHeight = Math.max(8, Math.round((item.value / maxValue) * 170));
+                      const barHeight = chartAllZero
+                        ? 10
+                        : Math.max(2, Math.round((item.value / maxValue) * 170));
+                      const tip =
+                        chartMode === "focus"
+                          ? `${Math.round((item.value ?? 0) / 60)} min focus`
+                          : chartMode === "sessions"
+                            ? `${item.value} sessions`
+                            : `${item.value} tasks completed`;
                       return (
                         <div className="a-bar-col" key={item.key}>
                           <div className="a-bar-value">{item.valueLabel}</div>
-                          <div className="a-bar" style={{ height: `${barHeight}px`, animationDelay: `${idx * 0.04}s` }} />
+                          <div
+                            className={`a-bar ${chartAllZero ? "placeholder" : ""}`}
+                            style={{ height: `${barHeight}px`, animationDelay: `${idx * 0.04}s` }}
+                            title={tip}
+                          />
                           <div className="a-bar-label">{item.label}</div>
                         </div>
                       );
                     })}
                   </div>
+                  {chartAllZero ? (
+                    <p className="a-empty" style={{ marginTop: 12 }}>
+                      Start a Pomodoro session to see your trends — placeholder bars show the week layout.
+                    </p>
+                  ) : null}
                 </article>
 
                 <article className="a-card">
@@ -538,10 +613,12 @@ export default function Analytics() {
                   <p className="a-card-sub">Snapshot for {todayKey}</p>
 
                   <div className="a-donut-wrap">
-                    <div className="a-donut" style={{ "--percent": `${todayCompletionRate}%` }}>
+                    <div className="a-donut spin-in" style={{ "--percent": `${todayCompletionRate}%` }}>
                       <div className="a-donut-center">
-                        <div className="a-donut-big">{todayCompletionRate}%</div>
-                        <div className="a-donut-small">done today</div>
+                        <div className="a-donut-big">{todayCompleted === 0 ? "—" : `${todayCompletionRate}%`}</div>
+                        <div className="a-donut-small">
+                          {todayCompleted === 0 ? "No tasks completed yet today" : "done today"}
+                        </div>
                       </div>
                     </div>
 
@@ -558,19 +635,37 @@ export default function Analytics() {
                   </div>
 
                   <div className="a-snapshot-grid">
-                    <div className="a-snap">
+                    <div className="a-snap a-stat-card">
+                      <div className="a-stat-ico" aria-hidden>
+                        📝
+                      </div>
                       <div className="a-snap-label">Tasks Added</div>
-                      <div className="a-snap-val">{todayAdded}</div>
+                      <div className="a-snap-val">
+                        <AnimatedStat value={todayAdded} />
+                      </div>
                     </div>
-                    <div className="a-snap">
+                    <div className="a-snap a-stat-card s2">
+                      <div className="a-stat-ico" aria-hidden>
+                        ⏱️
+                      </div>
                       <div className="a-snap-label">Focus Sessions</div>
-                      <div className="a-snap-val">{totalSessions}</div>
+                      <div className="a-snap-val">
+                        <AnimatedStat value={totalSessions} />
+                      </div>
                     </div>
-                    <div className="a-snap">
+                    <div className="a-snap a-stat-card s3">
+                      <div className="a-stat-ico" aria-hidden>
+                        🎯
+                      </div>
                       <div className="a-snap-label">Tracked Goals</div>
-                      <div className="a-snap-val">{totalGoals}</div>
+                      <div className="a-snap-val">
+                        <AnimatedStat value={totalGoals} />
+                      </div>
                     </div>
-                    <div className="a-snap">
+                    <div className="a-snap a-stat-card s4">
+                      <div className="a-stat-ico" aria-hidden>
+                        📚
+                      </div>
                       <div className="a-snap-label">Focus Logged</div>
                       <div className="a-snap-val">{formatDuration(totalSeconds)}</div>
                     </div>
@@ -585,7 +680,7 @@ export default function Analytics() {
                 </p>
 
                 {rows.length === 0 ? (
-                  <p className="a-empty">No analytics yet. Add goals and run Pomodoro sessions in Dashboard.</p>
+                  <EmptyStatePrompt />
                 ) : (
                   <table className="a-goal-table">
                     <thead>
@@ -618,6 +713,9 @@ export default function Analytics() {
                   </table>
                 )}
               </section>
+
+              <StreakTracker series={series} />
+              <QuickInsights series={series} rows={rows} totalSeconds={totalSeconds} totalSessions={totalSessions} />
             </>
           )}
         </main>
