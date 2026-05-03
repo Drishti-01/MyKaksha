@@ -141,6 +141,12 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
     socket.on("user-joined-room", onSystem);
     socket.on("user-left-room", onSystem);
 
+    // BUG 2 FIX — listen for message-error so sending state is never stuck
+    const onMessageError = () => {
+      setSending(false);
+    };
+    socket.on("message-error", onMessageError);
+
     return () => {
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
       socket.off("receive-message", onReceive);
@@ -149,6 +155,7 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
       socket.off("typing-stop", onTypingStop);
       socket.off("user-joined-room", onSystem);
       socket.off("user-left-room", onSystem);
+      socket.off("message-error", onMessageError);
     };
   }, [socketRef, roomId, isActiveTab, meUserId, onUnreadChange]);
 
@@ -209,12 +216,22 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
       // Use socket-only send. Do not add optimistic message locally —
       // server will persist and broadcast 'receive-message' to all clients (including sender).
       setSending(true);
+      // 5-second timeout fallback — if receive-message never arrives, re-enable send
+      const sendTimeout = setTimeout(() => {
+        setSending(false);
+        console.warn("ChatPanel: send-message timeout — no receive-message after 5s");
+      }, 5000);
       try {
+        // BUG 2 FIX — emit 'content' field (server now reads both content and text)
         socket.emit("send-message", { roomId, content: value, type: "user" });
-        // we will re-enable `sending` when receive-message arrives for this user
-        // also clear input to give instant feedback
         setText("");
+        // sendTimeout will clear itself when receive-message fires and setSending(false) is called
+        // We store it so we can cancel it if receive-message arrives first
+        // (The onReceive handler calls setSending(false) which is enough)
+        // Clear timeout after a short delay to avoid memory leak if message arrives fast
+        setTimeout(() => clearTimeout(sendTimeout), 6000);
       } catch (e) {
+        clearTimeout(sendTimeout);
         console.error("ChatPanel: socket emit failed, falling back to REST", e);
         await fallbackToRest();
         setSending(false);

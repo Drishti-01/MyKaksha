@@ -52,6 +52,17 @@ export async function joinRoomByCodeApi(code) {
   return parseJson(response);
 }
 
+// BUG 1 FIX — join a room by its MongoDB _id (used when clicking Join on a room card)
+// This adds the user to Room.members in MongoDB before navigating
+export async function joinRoomByIdApi(roomId) {
+  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/join`, {
+    method: "POST",
+    credentials: "include",
+    cache: "no-store",
+  });
+  return parseJson(response);
+}
+
 export async function leaveRoomApi(roomId) {
   const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/leave`, {
     method: "POST",

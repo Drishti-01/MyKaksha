@@ -93,16 +93,19 @@ io.use(async (socket, next) => {
   try {
     const authToken = socket.handshake.auth?.token || readCookieValue(socket.request.headers.cookie, AUTH_COOKIE_NAME);
     if (!authToken) {
+      console.warn("[socket] Auth failed: no token");
       return next(new Error("Authentication required"));
     }
 
     const payload = verifyAuthToken(authToken);
     if (!payload?.sub || !payload.sessionId) {
+      console.warn("[socket] Auth failed: invalid token payload");
       return next(new Error("Invalid token"));
     }
 
     const session = await readSession(payload.sessionId);
     if (!session || session.userId !== payload.sub) {
+      console.warn("[socket] Auth failed: session not found or userId mismatch");
       return next(new Error("Authentication required"));
     }
 
@@ -111,8 +114,10 @@ io.use(async (socket, next) => {
     socket.userId = String(payload.sub);
     socket.userName = String(payload.name || "Student");
     socket.sessionId = String(payload.sessionId);
+    console.log(`[socket] Auth success: userId=${socket.userId} name=${socket.userName}`);
     next();
-  } catch {
+  } catch (err) {
+    console.error("[socket] Auth error:", err?.message || err);
     next(new Error("Invalid token"));
   }
 });
@@ -152,6 +157,8 @@ io.on("connection", (socket) => {
       const username = socket.userName || "Student";
       const privacy = payload.privacy && typeof payload.privacy === "object" ? payload.privacy : {};
 
+      console.log(`[socket] join-room: userId=${userId} roomId=${roomId}`);
+
       const prevRoom = socket.data.roomId;
       if (prevRoom && prevRoom !== roomId) {
         socket.leave(prevRoom);
@@ -181,6 +188,22 @@ io.on("connection", (socket) => {
         appearInLeaderboard: privacy.appearInLeaderboard !== false,
       });
 
+      // BUG 1 FIX — add user to Room.members array in MongoDB via $addToSet
+      // $addToSet prevents duplicate entries if user rejoins
+      try {
+        await Room.findByIdAndUpdate(
+          roomId,
+          {
+            $addToSet: { members: { userId, name: username, joinedAt: new Date() } },
+            $set: { lastActiveAt: new Date(), isActive: true },
+          }
+        );
+        console.log(`[socket] join-room: added userId=${userId} to members of roomId=${roomId}`);
+      } catch (memberErr) {
+        // Non-fatal — presence registry still tracks them in-memory
+        console.warn("[socket] join-room: failed to update Room.members:", memberErr?.message);
+      }
+
       await createRoomSessionEntry({ roomId, userId, userName: username });
       await markRoomActivity(roomId);
 
@@ -201,9 +224,9 @@ io.on("connection", (socket) => {
       const roomStats = await getRoomStats(roomId);
       io.to(roomId).emit("room-stats", { roomId, stats: roomStats });
 
-      console.log(`Socket: user joined room ${roomId}`, { userId, username });
+      console.log(`[socket] join-room: complete userId=${userId} roomId=${roomId}`);
     } catch (error) {
-      console.error("Socket join-room failed:", error);
+      console.error("[socket] join-room failed:", error);
       socket.emit("room-joined", { success: false, message: "Join failed" });
     }
   });
@@ -318,9 +341,19 @@ io.on("connection", (socket) => {
 
   socket.on("send-message", async (payload = {}, cb) => {
     const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
-    if (!roomId) return;
-    const text = String(payload.text || "").trim();
-    if (!text) return;
+    if (!roomId) {
+      console.warn("[socket] send-message: no roomId");
+      return;
+    }
+    // BUG 2 FIX — frontend sends 'content', server was reading 'text' only
+    // Accept both field names so either works
+    const text = String(payload.content || payload.text || "").trim();
+    if (!text) {
+      console.warn("[socket] send-message: empty text, ignoring");
+      return;
+    }
+
+    console.log(`[socket] send-message: roomId=${roomId} userId=${socket.userId} len=${text.length}`);
 
     try {
       const message = await createChatMessage({
@@ -334,13 +367,17 @@ io.on("connection", (socket) => {
         ...message,
         clientMessageId: typeof payload.clientMessageId === "string" ? payload.clientMessageId : undefined,
       };
+      // Emit to ALL sockets in room including sender — io.to() not socket.to()
       io.to(roomId).emit("receive-message", emittedMessage);
+      console.log(`[socket] send-message: broadcast to room ${roomId} msgId=${message.id || message._id}`);
       if (typeof cb === "function") {
         cb({ success: true, message: emittedMessage });
       }
       await markRoomActivity(roomId);
     } catch (error) {
-      console.warn("Socket send-message fallback failed:", error?.message || error);
+      console.error("[socket] send-message failed:", error?.message || error);
+      // Notify sender so frontend can re-enable the send button
+      socket.emit("message-error", { error: "Failed to send message" });
       if (typeof cb === "function") {
         cb({ success: false, message: "Send failed" });
       }

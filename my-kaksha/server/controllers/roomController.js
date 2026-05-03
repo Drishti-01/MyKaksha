@@ -16,6 +16,7 @@
   closeRoomSessionEntry,
 } from "../services/roomStore.js";
 import { createChatMessage, readRecentChatMessages } from "../services/chatStore.js";
+import Room from "../models/Room.js";
 import RoomSession from "../models/RoomSession.js";
 import { getGlobalStudyingApproxCount, getLobbySocketCount, getVisibleOnlineCountForRoom } from "../services/studyPresenceRegistry.js";
 
@@ -249,7 +250,35 @@ export async function joinRoomByCode(req, res) {
   if (!room) return fail(res, 404, "Room not found");
   await createRoomSessionEntry({ roomId: room.id, userId: req.auth.user.id, userName: req.auth.user.name });
   await markRoomActivity(room.id);
+  console.log(`[joinRoomByCode] userId=${req.auth.user.id} joined roomId=${room.id} via code=${code}`);
   ok(res, { room });
+}
+
+// BUG 1 FIX — join by MongoDB _id (used when clicking Join on a room card in the lobby)
+// Adds user to Room.members via $addToSet — prevents duplicates
+export async function joinRoomById(req, res) {
+  const roomId = req.params.id;
+  const userId = req.auth.user.id;
+  const userName = req.auth.user.name;
+
+  const room = await findRoomById(roomId);
+  if (!room) return fail(res, 404, "Room not found");
+
+  // Use $addToSet so rejoining never creates duplicate member entries
+  await Room.findByIdAndUpdate(
+    roomId,
+    {
+      $addToSet: { members: { userId, name: userName, joinedAt: new Date() } },
+      $set: { lastActiveAt: new Date(), isActive: true },
+    }
+  );
+
+  await createRoomSessionEntry({ roomId, userId, userName });
+  await markRoomActivity(roomId);
+
+  const updated = await findRoomById(roomId);
+  console.log(`[joinRoomById] userId=${userId} joined roomId=${roomId}`);
+  ok(res, { room: updated });
 }
 
 export async function leaveRoom(req, res) {

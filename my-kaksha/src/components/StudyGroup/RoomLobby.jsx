@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
-import { createRoomApi, fetchRoomsList, joinRoomByCodeApi } from "../../api/rooms";
+import { createRoomApi, fetchRoomsList, joinRoomByCodeApi, joinRoomByIdApi } from "../../api/rooms";
 import { rememberRoom, syncMyRooms } from "../../hooks/useRoom";
 import RoomCard from "./RoomCard";
 import CreateRoomModal from "./CreateRoomModal";
@@ -128,9 +128,18 @@ export default function RoomLobby() {
     navigate(`/study-group/${room.id}`);
   }
 
-  function joinRoom(id) {
+  // BUG 1 FIX — call join API before navigating so user is added to Room.members in MongoDB
+  // Previously this just navigated without any API call, leaving members array empty
+  async function joinRoom(id) {
     const room = rooms.find((r) => r.id === id);
     rememberRoom(id, room?.name);
+    try {
+      await joinRoomByIdApi(id);
+      console.log("[RoomLobby] joinRoomByIdApi success for roomId:", id);
+    } catch (e) {
+      // Non-fatal — still navigate even if API fails (socket join-room will also add to members)
+      console.warn("[RoomLobby] joinRoomByIdApi failed (non-fatal):", e.message);
+    }
     navigate(`/study-group/${id}`);
   }
 

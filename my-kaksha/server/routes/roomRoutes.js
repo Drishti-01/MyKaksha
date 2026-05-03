@@ -12,6 +12,7 @@ import {
   getRoomStatsController,
   getRoomStudyTimes,
   joinRoomByCode,
+  joinRoomById,
   leaveRoom,
   listMessages,
   listRooms,
@@ -28,6 +29,7 @@ router.get("/my-rooms", asyncHandler(listMyRooms));
 router.post("/", asyncHandler(createRoom));
 router.post("/join/:code", asyncHandler(joinRoomByCode));
 router.get("/:id", asyncHandler(getRoom));
+router.post("/:id/join", asyncHandler(joinRoomById));
 router.get("/:id/study-times", asyncHandler(getRoomStudyTimes));
 router.get("/:id/leaderboard", asyncHandler(getRoomLeaderboard));
 router.post("/:id/leave", asyncHandler(leaveRoom));
