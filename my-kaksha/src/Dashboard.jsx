@@ -4,7 +4,7 @@ import { useAuth } from "./auth/useAuth";
 import AppSidebar from "./components/AppSidebar";
 import timerBg from "./components/download (13).jpg";
 import taskBg from "./components/taskbg.jpg";
-import goalsBg from "./components/Stripe.jpg";
+import goalsBg from "./components/bg.png";
 import useSidebarState from "./components/useSidebarState";
 
 const PROJECTS_STORAGE_KEY = "mykaksha_projects";
