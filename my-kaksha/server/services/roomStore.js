@@ -387,9 +387,9 @@ export async function createRoomSessionEntry({ roomId, userId, userName }) {
   const date = todayKey(joinedAt);
   const mongo = await isMongoUsable();
   if (mongo) {
-    // $setOnInsert: only runs on INSERT (new document) — no overlap with $set
-    // $set: always runs on both insert and update
-    // Fields must NOT appear in both operators — MongoDB throws ConflictingUpdateOperators
+    // On join: reset totalFocusMinutes to 0 for today's session
+    // Focus minutes are ONLY added by trackSessionComplete (Pomodoro completion)
+    // This prevents stale data from previous sessions showing wrong time
     return RoomSession.findOneAndUpdate(
       { roomId, userId, date },
       {
@@ -397,7 +397,6 @@ export async function createRoomSessionEntry({ roomId, userId, userName }) {
           roomId,
           userId,
           date,
-          totalFocusMinutes: 0,
           totalMinutes: 0,
           sessionsCompleted: 0,
         },
@@ -406,6 +405,7 @@ export async function createRoomSessionEntry({ roomId, userId, userName }) {
           joinedAt,
           leftAt: null,
           lastActive: joinedAt,
+          totalFocusMinutes: 0,
         },
       },
       { upsert: true, returnDocument: "after" }

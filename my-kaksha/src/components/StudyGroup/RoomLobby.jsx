@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { createRoomApi, fetchRoomsList, joinRoomByCodeApi, joinRoomByIdApi } from "../../api/rooms";
 import { rememberRoom, syncMyRooms } from "../../hooks/useRoom";
+import { useAuth } from "../../auth/useAuth";
 import RoomCard from "./RoomCard";
 import CreateRoomModal from "./CreateRoomModal";
 import JoinWithCode from "./JoinWithCode";
@@ -27,6 +28,7 @@ function formatRelative(iso) {
 
 export default function RoomLobby() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const lobbySocketRef = useRef(null);
   const lobbyJoinSentRef = useRef(false);
   const [rooms, setRooms] = useState([]);
@@ -140,14 +142,20 @@ export default function RoomLobby() {
   async function joinRoom(id) {
     const room = rooms.find((r) => r.id === id);
     rememberRoom(id, room?.name);
-    // Store last joined room so user can rejoin after navigation
     try { localStorage.setItem("lastJoinedRoom", JSON.stringify({ id, name: room?.name || "Room" })); } catch { /* ignore */ }
-    try {
-      await joinRoomByIdApi(id);
-      console.log("[RoomLobby] joinRoomByIdApi success for roomId:", id);
-    } catch (e) {
-      // Non-fatal — still navigate even if API fails (socket join-room will also add to members)
-      console.warn("[RoomLobby] joinRoomByIdApi failed (non-fatal):", e.message);
+
+    // Only call join API if user is not already a member
+    // Members are stored permanently in MongoDB — no need to re-join on every visit
+    const alreadyMember = (room?.members || []).some((m) => m.userId === user?.id);
+    if (!alreadyMember) {
+      try {
+        await joinRoomByIdApi(id);
+        console.log("[RoomLobby] joined roomId:", id);
+      } catch (e) {
+        console.warn("[RoomLobby] joinRoomByIdApi failed (non-fatal):", e.message);
+      }
+    } else {
+      console.log("[RoomLobby] already a member of roomId:", id, "— skipping join API");
     }
     navigate(`/study-group/${id}`);
   }

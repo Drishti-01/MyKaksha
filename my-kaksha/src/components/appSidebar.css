@@ -142,3 +142,22 @@
 .mk-sidebar.collapsed .mk-sidebar-header {
   justify-content: center;
 }
+
+/* Ensure grid main content areas never overflow their cell when sidebar collapses */
+.d-shell > .d-main,
+.a-shell > .a-main,
+.pt-shell > .pt-main {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+/* Dashboard shell needs height constraint so collapsed sidebar doesn't take full width */
+.d-shell {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.d-shell > .d-main {
+  height: 100vh;
+  overflow-y: auto;
+}
