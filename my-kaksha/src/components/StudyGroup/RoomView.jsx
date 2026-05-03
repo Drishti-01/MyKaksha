@@ -272,7 +272,12 @@ export default function RoomView() {
   const chatPaused = room?.focusStyle === "silent" && timer.phase === "focus" && timer.running;
 
   async function handleLeave() {
+    // Emit leave-room socket event so server cleans up presence immediately
+    socketRef.current?.emit("leave-room", { roomId });
+    // Call REST API to update MongoDB (remove from members, close session)
     await leaveRoom();
+    // Clear last joined room from localStorage
+    try { localStorage.removeItem("lastJoinedRoom"); } catch { /* ignore */ }
     navigate("/study-group");
   }
 

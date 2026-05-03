@@ -254,8 +254,9 @@ export async function joinRoomByCode(req, res) {
   ok(res, { room });
 }
 
-// BUG 1 FIX — join by MongoDB _id (used when clicking Join on a room card in the lobby)
-// Adds user to Room.members via $addToSet — prevents duplicates
+// Join by MongoDB _id (used when clicking Join on a room card in the lobby)
+// Uses $ne check on userId + $push to avoid duplicates by userId field
+// $addToSet on subdocuments does full-object equality, not field equality
 export async function joinRoomById(req, res) {
   const roomId = req.params.id;
   const userId = req.auth.user.id;
@@ -264,11 +265,11 @@ export async function joinRoomById(req, res) {
   const room = await findRoomById(roomId);
   if (!room) return fail(res, 404, "Room not found");
 
-  // Use $addToSet so rejoining never creates duplicate member entries
-  await Room.findByIdAndUpdate(
-    roomId,
+  // Only push if userId not already in members array
+  await Room.updateOne(
+    { _id: roomId, "members.userId": { $ne: userId } },
     {
-      $addToSet: { members: { userId, name: userName, joinedAt: new Date() } },
+      $push: { members: { userId, name: userName, joinedAt: new Date() } },
       $set: { lastActiveAt: new Date(), isActive: true },
     }
   );

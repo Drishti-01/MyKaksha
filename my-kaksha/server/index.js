@@ -11,6 +11,7 @@ import "dotenv/config";
 import { createApp } from "./app.js";
 import { ensureDatabaseConnection } from "./config/database.js";
 import Room from "./models/Room.js";
+import Message from "./models/Message.js";
 import { seedDefaultRooms } from "./services/roomStore.js";
 import { createChatMessage, readRecentChatMessages } from "./services/chatStore.js";
 import { AUTH_COOKIE_NAME, verifyAuthToken } from "./utils/auth.js";
@@ -188,18 +189,18 @@ io.on("connection", (socket) => {
         appearInLeaderboard: privacy.appearInLeaderboard !== false,
       });
 
-      // Add user to Room.members in MongoDB via $addToSet
-      // $addToSet prevents duplicate entries if user rejoins the same room
-      // Schema: roomMemberSchema has { userId, name, joinedAt } — match exactly
+      // Add user to Room.members in MongoDB
+      // Use $ne check on userId + $push to avoid duplicates by userId field
+      // $addToSet on subdocuments does full-object equality, not field equality
       try {
-        await Room.findByIdAndUpdate(
-          roomId,
+        await Room.updateOne(
+          { _id: roomId, "members.userId": { $ne: userId } },
           {
-            $addToSet: { members: { userId, name: username, joinedAt: new Date() } },
+            $push: { members: { userId, name: username, joinedAt: new Date() } },
             $set: { lastActiveAt: new Date(), isActive: true },
           }
         );
-        console.log(`[socket] join-room: added userId=${userId} to members of roomId=${roomId}`);
+        console.log(`[socket] join-room: upserted userId=${userId} in members of roomId=${roomId}`);
       } catch (memberErr) {
         // Non-fatal — presence registry still tracks them in-memory
         console.warn("[socket] join-room: failed to update Room.members:", memberErr?.message);
@@ -462,6 +463,37 @@ io.on("connection", (socket) => {
     if (typeof cb !== "function") return;
     if (!roomId) return cb({ members: [] });
     cb({ members: dedupeMembersByUserId(getRoomMembersForClient(roomId, socket.id)) });
+  });
+
+  // Explicit leave-room event — called when user clicks "Leave Room" button
+  // Cleans up presence, broadcasts departure, updates lobby count
+  socket.on("leave-room", async ({ roomId } = {}) => {
+    const targetRoom = typeof roomId === "string" ? roomId.trim() : socket.data.roomId;
+    if (!targetRoom) return;
+    const userId = socket.userId || socket.data.userId;
+    const username = socket.userName || socket.data.username;
+
+    console.log(`[socket] leave-room: userId=${userId} roomId=${targetRoom}`);
+
+    socket.leave(targetRoom);
+    socket.data.roomId = null;
+    socket.data.joinedRoomId = null;
+
+    // Remove from in-memory presence registry
+    const { removeRoomMember } = await import("./services/studyPresenceRegistry.js");
+    removeRoomMember(targetRoom, socket.id);
+
+    // Notify remaining room members
+    io.to(targetRoom).emit("user-left-room", {
+      roomId: targetRoom,
+      userId,
+      username,
+      text: `${username} left the room`,
+      timestamp: new Date().toISOString(),
+    });
+
+    broadcastPresence(targetRoom);
+    emitLobbyCount();
   });
 
   socket.on("disconnect", async () => {

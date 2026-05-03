@@ -39,6 +39,15 @@ export default function RoomLobby() {
   const [myRooms, setMyRooms] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [lastJoined, setLastJoined] = useState(null);
+
+  // Check localStorage for last joined room — show rejoin prompt
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("lastJoinedRoom");
+      if (raw) setLastJoined(JSON.parse(raw));
+    } catch { /* ignore */ }
+  }, []);
 
   async function load() {
     setLoading(true);
@@ -128,11 +137,11 @@ export default function RoomLobby() {
     navigate(`/study-group/${room.id}`);
   }
 
-  // BUG 1 FIX — call join API before navigating so user is added to Room.members in MongoDB
-  // Previously this just navigated without any API call, leaving members array empty
   async function joinRoom(id) {
     const room = rooms.find((r) => r.id === id);
     rememberRoom(id, room?.name);
+    // Store last joined room so user can rejoin after navigation
+    try { localStorage.setItem("lastJoinedRoom", JSON.stringify({ id, name: room?.name || "Room" })); } catch { /* ignore */ }
     try {
       await joinRoomByIdApi(id);
       console.log("[RoomLobby] joinRoomByIdApi success for roomId:", id);
@@ -164,7 +173,28 @@ export default function RoomLobby() {
       </header>
 
       {loading ? <p className="sg2-soft-text">Loading rooms…</p> : null}
-      {error ? <p className="sg2-error" role="alert">{error}</p> : null}
+      {error ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+          <p className="sg2-error" role="alert" style={{ margin: 0 }}>{error}</p>
+          <button type="button" className="sg2-btn secondary" style={{ padding: "6px 14px", fontSize: "0.82rem" }} onClick={load}>
+            Retry
+          </button>
+        </div>
+      ) : null}
+
+      {lastJoined ? (
+        <div className="sg2-banner" style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <span>You were in <strong>{lastJoined.name}</strong> — want to rejoin?</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" className="sg2-btn" style={{ padding: "6px 14px", fontSize: "0.82rem" }} onClick={() => joinRoom(lastJoined.id)}>
+              Rejoin
+            </button>
+            <button type="button" className="sg2-btn secondary" style={{ padding: "6px 10px", fontSize: "0.82rem" }} onClick={() => { setLastJoined(null); try { localStorage.removeItem("lastJoinedRoom"); } catch { /* ignore */ } }}>
+              ✕
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="sg2-grid-lobby">
         <section>
