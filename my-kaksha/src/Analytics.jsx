@@ -15,7 +15,6 @@ const css = `
   * { box-sizing: border-box; }
 
   .a-shell {
-    min-height: 100vh;
     height: 100vh;
     overflow: hidden;
     display: grid;

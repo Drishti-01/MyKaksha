@@ -6,7 +6,9 @@
   flex-direction: column;
   gap: 14px;
   height: 100vh;
+  width: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   position: sticky;
   top: 0;
 }
