@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchStudyData, saveStudyData } from "./api/studyData";
+import { useAuth } from "./auth/useAuth";
 import AppSidebar from "./components/AppSidebar";
 import timerBg from "./components/download (13).jpg";
 import taskBg from "./components/taskbg.jpg";
@@ -620,6 +621,7 @@ function loadProjectsSnapshot() {
 export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStudyGroup, onGoToProjects }) {
   const [collapsed, setCollapsed] = useSidebarState();
   const [activeNav, setActiveNav] = useState("Dashboard");
+  const { user } = useAuth();
 
   const [focusMinutes, setFocusMinutes] = useState(25);
   const [breakMinutes, setBreakMinutes] = useState(5);
@@ -671,14 +673,14 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
   }, [projectsSnapshot]);
   const productivityStats = useMemo(() => {
     const sessionsToday = Number(focusStats.dailyCompleted?.[todayKey]) || 0;
-    const streak = calculateStreak(focusStats.dailyCompleted ?? {}, todayKey);
+    const streak = Math.max(0, Number(user?.streakDays) || 0);
 
     return {
       streak,
       sessionsToday,
       totalFocusTime: formatFocusDuration(focusStats.totalFocusSeconds || 0),
     };
-  }, [focusStats, todayKey]);
+  }, [focusStats, todayKey, user?.streakDays]);
 
   useEffect(() => {
     let mounted = true;

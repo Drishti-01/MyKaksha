@@ -60,9 +60,12 @@ export default function TimerPanel({
         </svg>
         <div className="sg2-timer-center">
           <div className="sg2-timer-big">{formatted}</div>
-          <p className="sg2-soft-text" style={{ margin: 0 }}>{label}</p>
-          <p className="sg2-soft-text" style={{ margin: 0 }}>{sessionOf}</p>
         </div>
+      </div>
+
+      <div className="sg2-timer-meta">
+        <p className="sg2-soft-text" style={{ margin: 0, textAlign: "center" }}>{label}</p>
+        <p className="sg2-soft-text" style={{ margin: 0, textAlign: "center" }}>{sessionOf}</p>
       </div>
 
       <p className="sg2-soft-text" style={{ textAlign: "center", marginTop: 8 }}>
