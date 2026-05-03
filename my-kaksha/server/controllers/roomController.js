@@ -202,7 +202,8 @@ export async function getRoomStudyTimes(req, res) {
     sessions: dedupeByUserId(sessions).map((session) => ({
       ...session,
       userId: String(session.userId),
-      totalFocusMinutes: Number(session.totalFocusMinutes ?? session.totalMinutes ?? 0),
+      // Only show Pomodoro-completed focus minutes — NOT raw time in room
+      totalFocusMinutes: Number(session.totalFocusMinutes || 0),
     })),
   });
 }
@@ -265,22 +266,20 @@ export async function joinRoomById(req, res) {
   const room = await findRoomById(roomId);
   if (!room) return fail(res, 404, "Room not found");
 
-  // Only push if userId not already in members array
-  // Use $or to handle both empty array and non-member cases
-  const updateResult = await Room.updateOne(
-    {
-      _id: roomId,
-      $or: [
-        { members: { $size: 0 } },
-        { "members.userId": { $ne: userId } },
-      ],
-    },
-    {
-      $push: { members: { userId, name: userName, joinedAt: new Date() } },
-      $set: { lastActiveAt: new Date(), isActive: true },
-    }
-  );
-  console.log(`[joinRoomById] Room.updateOne matched=${updateResult.matchedCount} modified=${updateResult.modifiedCount} userId=${userId} roomId=${roomId}`);
+  // Add to members only if not already present — check first, then push
+  const existing = await Room.findOne({ _id: roomId, "members.userId": userId }).lean();
+  if (!existing) {
+    await Room.findByIdAndUpdate(
+      roomId,
+      {
+        $push: { members: { userId, name: userName, joinedAt: new Date() } },
+        $set: { lastActiveAt: new Date(), isActive: true },
+      }
+    );
+    console.log(`[joinRoomById] member added userId=${userId} roomId=${roomId}`);
+  } else {
+    console.log(`[joinRoomById] userId=${userId} already a member of roomId=${roomId}`);
+  }
 
   await createRoomSessionEntry({ roomId, userId, userName });
   await markRoomActivity(roomId);

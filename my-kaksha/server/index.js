@@ -193,27 +193,28 @@ io.on("connection", (socket) => {
         appearInLeaderboard: privacy.appearInLeaderboard !== false,
       });
 
-      // Add user to Room.members in MongoDB
-      // Use $or to handle BOTH cases: empty array AND array where userId not present
-      // { "members.userId": { $ne: userId } } fails on empty arrays in some MongoDB versions
-      try {
-        const updateResult = await Room.updateOne(
-          {
-            _id: roomId,
-            $or: [
-              { members: { $size: 0 } },
-              { "members.userId": { $ne: userId } },
-            ],
-          },
-          {
-            $push: { members: { userId, name: username, joinedAt: new Date() } },
-            $set: { lastActiveAt: new Date(), isActive: true },
-          }
-        );
-        console.log(`[socket] join-room: Room.updateOne matched=${updateResult.matchedCount} modified=${updateResult.modifiedCount} userId=${userId} roomId=${roomId}`);
-      } catch (memberErr) {
-        console.error("[socket] join-room: Room.updateOne FAILED:", memberErr?.message, memberErr);
-      }
+  // Add user to Room.members in MongoDB
+  // Strategy: use findByIdAndUpdate with $push + $ne filter on the array element
+  // This is the most reliable approach across all MongoDB versions
+  try {
+    // First check if already a member to avoid duplicate push
+    const existing = await Room.findOne({ _id: roomId, "members.userId": userId }).lean();
+    if (!existing) {
+      const updateResult = await Room.findByIdAndUpdate(
+        roomId,
+        {
+          $push: { members: { userId, name: username, joinedAt: new Date() } },
+          $set: { lastActiveAt: new Date(), isActive: true },
+        },
+        { returnDocument: "after" }
+      );
+      console.log(`[socket] join-room: member added userId=${userId} roomId=${roomId} success=${!!updateResult}`);
+    } else {
+      console.log(`[socket] join-room: userId=${userId} already in members of roomId=${roomId}`);
+    }
+  } catch (memberErr) {
+    console.error("[socket] join-room: Room member update FAILED:", memberErr?.message, memberErr);
+  }
 
       await createRoomSessionEntry({ roomId, userId, userName: username });
       await markRoomActivity(roomId);

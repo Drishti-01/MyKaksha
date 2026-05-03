@@ -62,6 +62,7 @@ export default function RoomView() {
   const { user } = useAuth();
   const socketRef = useRef(null);
   const joinSentRef = useRef(false);
+  const [socketKey, setSocketKey] = useState(0); // increments on each new socket connection
   const [members, setMembers] = useState([]);
   const [studyTimes, setStudyTimes] = useState([]);
   const [weeklyLeaderboard, setWeeklyLeaderboard] = useState([]);
@@ -145,7 +146,6 @@ export default function RoomView() {
     });
     socketRef.current = socket;
     joinSentRef.current = false;
-
     const loadStudyTimes = async () => {
       try {
         const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/study-times`, { credentials: "include" });
@@ -155,7 +155,8 @@ export default function RoomView() {
         const unique = dedupeByUserId(rows).map((row) => ({
           ...row,
           userId: String(row.userId),
-          totalFocusMinutes: Number(row.totalFocusMinutes ?? row.totalMinutes ?? 0),
+          // Only show Pomodoro focus minutes — not raw join time
+          totalFocusMinutes: Number(row.totalFocusMinutes || 0),
         })).sort((a, b) => (b.totalFocusMinutes || 0) - (a.totalFocusMinutes || 0));
         setStudyTimes(unique);
       } catch {
@@ -196,6 +197,7 @@ export default function RoomView() {
 
     socket.on("connect", () => {
       setReconnecting(false);
+      setSocketKey((k) => k + 1); // force ChatPanel to re-register listeners
       emitJoin();
     });
 
@@ -410,6 +412,7 @@ export default function RoomView() {
           <div className="sg2-right-body">
             {tab === "chat" ? (
               <ChatPanel
+                key={socketKey}
                 roomId={roomId}
                 socketRef={socketRef}
                 meUserId={userId}
