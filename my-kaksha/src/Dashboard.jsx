@@ -3,8 +3,6 @@ import { fetchStudyData, saveStudyData } from "./api/studyData";
 import { useAuth } from "./auth/useAuth";
 import AppSidebar from "./components/AppSidebar";
 import timerBg from "./components/download (13).jpg";
-import taskBg from "./components/taskbg.jpg";
-import goalsBg from "./components/Stripe.jpg";
 import useSidebarState from "./components/useSidebarState";
 
 const PROJECTS_STORAGE_KEY = "mykaksha_projects";
@@ -131,10 +129,10 @@ const css = `
   .d-card-title { margin: 0 0 14px; color: #4a3728; font-weight: 700; }
 
   .d-task-card {
-   background-image: url("${taskBg}");
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    position: relative;
+    background:
+      linear-gradient(135deg, rgba(255, 253, 249, 0.98), rgba(246, 239, 229, 0.94)),
+      repeating-linear-gradient(0deg, transparent 0 31px, rgba(200, 182, 166, 0.16) 32px);
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -142,12 +140,74 @@ const css = `
     overflow: hidden;
   }
 
+  .d-task-card::before,
+  .goals-card::before {
+    content: "";
+    position: absolute;
+    inset: 12px;
+    border: 1px dashed rgba(139, 111, 94, 0.18);
+    border-radius: 20px;
+    pointer-events: none;
+  }
+
+  .d-task-card::after {
+    content: "";
+    position: absolute;
+    width: 90px;
+    height: 90px;
+    right: -26px;
+    top: -24px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #ffe3a3 0 34%, transparent 36%),
+      conic-gradient(from 12deg, #eaa0a2 0 12%, transparent 12% 24%, #9ec7d7 24% 36%, transparent 36% 50%, #b5cf8d 50% 62%, transparent 62% 100%);
+    opacity: 0.8;
+    pointer-events: none;
+  }
+
   .d-task-card-top {
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+
+  .d-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .d-section-heading .d-card-title { margin: 0; }
+
+  .d-mini-badge {
+    min-height: 32px;
+    border-radius: 999px;
+    border: 1px solid rgba(139, 111, 94, 0.16);
+    background: rgba(255, 253, 249, 0.78);
+    color: #7a6151;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 11px;
+    font-size: 0.74rem;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .d-badge-mark {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #e8a76f;
+    box-shadow: 14px 0 0 #8bb6c8, 28px 0 0 #9dbb73;
+    margin-right: 28px;
     flex-shrink: 0;
   }
 
   .d-task-scroll {
-  
+    position: relative;
+    z-index: 1;
     flex: 1;
     min-height: 0;
     max-height: 260px;
@@ -315,9 +375,10 @@ const css = `
     border: 1px solid #e5ceb9;
     border-radius: 12px;
     padding: 10px;
-    background: #faf8f3;
+    background: rgba(255, 253, 249, 0.9);
     color: #5a4a3a;
     font-family: inherit;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
   }
 
   .d-goal-add input[type="number"] { flex: 0 0 110px; min-width: 110px; }
@@ -345,23 +406,168 @@ const css = `
 
   .d-task,
   .d-goal-item {
-    border: 1px solid #eed6c4;
-    border-radius: 12px;
-    background: #faf8f3;
-    padding: 10px;
+    border: 1px solid rgba(226, 203, 181, 0.86);
+    border-radius: 16px;
+    background: rgba(255, 253, 249, 0.86);
+    padding: 11px;
     display: flex;
     align-items: center;
     gap: 8px;
     justify-content: space-between;
+    box-shadow: 0 8px 18px rgba(156, 132, 112, 0.09);
+    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  }
+
+  .d-task:hover,
+  .d-goal-item:hover {
+    transform: translateY(-1px);
+    border-color: #d9bda4;
+    box-shadow: 0 12px 24px rgba(156, 132, 112, 0.13);
+  }
+
+  .d-task {
+    justify-content: flex-start;
+  }
+
+  .d-task input[type="checkbox"] {
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 8px;
+    border: 2px solid #d8bea8;
+    background: #fffdf9;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+
+  .d-task input[type="checkbox"]::before {
+    content: "";
+    width: 10px;
+    height: 6px;
+    border-left: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+    transform: rotate(-45deg) scale(0);
+    transform-origin: center;
+    transition: transform 140ms ease;
+  }
+
+  .d-task input[type="checkbox"]:checked {
+    border-color: #6f9b74;
+    background: #6f9b74;
+  }
+
+  .d-task input[type="checkbox"]:checked::before {
+    transform: rotate(-45deg) scale(1);
+  }
+
+  .d-task-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #ffe2aa, #f1b582);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #7d5435;
+    font-size: 0.78rem;
+    font-weight: 900;
+    flex: 0 0 auto;
   }
 
   .d-task span { font-size: 0.9rem; }
-  .d-task.done span { text-decoration: line-through; color: #b09f8f; }
+  .d-task.done > span:not(.d-task-icon) { text-decoration: line-through; color: #b09f8f; }
+  .d-task.done .d-task-icon {
+    background: linear-gradient(135deg, #dceccd, #9fbe7b);
+    color: #526f3f;
+  }
 
-  .d-goal-main { display: grid; gap: 4px; }
+  .goals-card {
+    position: relative;
+    overflow: hidden;
+    display: grid;
+    gap: 14px;
+    background:
+      radial-gradient(circle at 90% 12%, rgba(168, 203, 213, 0.38), transparent 28%),
+      radial-gradient(circle at 8% 95%, rgba(238, 177, 118, 0.28), transparent 24%),
+      linear-gradient(135deg, #fffdf9 0%, #f8f1e7 52%, #eef6f3 100%);
+  }
+
+  .goals-card::after {
+    content: "";
+    position: absolute;
+    right: 22px;
+    bottom: 18px;
+    width: 104px;
+    height: 62px;
+    border-radius: 18px;
+    background:
+      linear-gradient(90deg, transparent 15px, rgba(139, 111, 94, 0.14) 16px 17px, transparent 18px),
+      linear-gradient(#fff8ec 0 0);
+    border: 1px solid rgba(139, 111, 94, 0.12);
+    transform: rotate(-5deg);
+    opacity: 0.68;
+    pointer-events: none;
+  }
+
+  .goals-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .d-goal-add {
+    padding: 12px;
+    border-radius: 18px;
+    border: 1px solid rgba(226, 203, 181, 0.7);
+    background: rgba(255, 253, 249, 0.66);
+    backdrop-filter: blur(8px);
+  }
+
+  .d-goal-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .d-goal-list .d-goal-item:only-child {
+    grid-column: 1 / -1;
+  }
+
+  .d-goal-main { display: grid; gap: 7px; flex: 1; min-width: 0; }
   .d-goal-title { font-weight: 700; color: #4a3728; }
   .d-goal-meta { color: #8b6f5e; font-size: 0.8rem; }
-  .d-goal-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .d-goal-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+  .d-goal-progress {
+    height: 8px;
+    border-radius: 999px;
+    background: #eadccb;
+    overflow: hidden;
+  }
+
+  .d-goal-progress span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #e9a66e, #7eb3c6, #83a95f);
+  }
+
+  .d-goal-kicker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #7a6151;
+    font-size: 0.76rem;
+    font-weight: 800;
+  }
+
+  .d-goal-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+    background: #8bb6c8;
+    box-shadow: inset 0 0 0 4px #e7f4f7;
+    flex: 0 0 auto;
+  }
 
   .d-tracker-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
   .d-tracker-item {
@@ -454,6 +660,7 @@ const css = `
     .d-settings { width: 100%; }
     .d-tracker-grid { grid-template-columns: 1fr; }
     .d-productivity-grid { grid-template-columns: 1fr; }
+    .d-goal-list { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 780px) {
@@ -1081,7 +1288,13 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
 
             <section className="d-card d-task-card">
               <div className="d-task-card-top">
-                <h2 className="d-card-title">Tasks of the Day</h2>
+                <div className="d-section-heading">
+                  <h2 className="d-card-title">Tasks of the Day</h2>
+                  <span className="d-mini-badge">
+                    <span className="d-badge-mark" />
+                    {tasks.filter((task) => !task.done).length} open
+                  </span>
+                </div>
                 <div className="d-task-add">
                   <input
                     type="text"
@@ -1106,6 +1319,7 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
                         onChange={() => toggleTask(task.id)}
                         aria-label={`Mark ${task.text} complete`}
                       />
+                      <span className="d-task-icon">{task.done ? "OK" : "DO"}</span>
                       <span>{task.text}</span>
                     </li>
                   ))}
@@ -1115,9 +1329,15 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
 
             <section
               className="d-card goals-card"
-              style={{ gridColumn: "1 / -1", backgroundImage: `url(${goalsBg})`, backgroundSize: "cover", backgroundPosition: "center" }}
+              style={{ gridColumn: "1 / -1" }}
             >
-              <h2 className="d-card-title">Goals</h2>
+              <div className="d-section-heading">
+                <h2 className="d-card-title">Goals</h2>
+                <span className="d-mini-badge">
+                  <span className="d-badge-mark" />
+                  {goals.length} goals
+                </span>
+              </div>
               <div className="d-goal-add">
                 <input
                   type="text"
@@ -1148,12 +1368,20 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
                     const stats = goalStats[goal.id];
                     const studiedMins = Math.floor((stats?.totalSeconds ?? 0) / 60);
                     const sessions = stats?.sessions ?? 0;
+                    const progress = Math.min(100, Math.round((studiedMins / goal.minutes) * 100));
                     return (
                       <li key={goal.id} className="d-goal-item">
                         <div className="d-goal-main">
+                          <div className="d-goal-kicker">
+                            <span className="d-goal-dot" />
+                            Study target
+                          </div>
                           <div className="d-goal-title">{goal.title}</div>
                           <div className="d-goal-meta">
                             Target: {goal.minutes} min • Studied: {studiedMins} min • Sessions: {sessions}
+                          </div>
+                          <div className="d-goal-progress" aria-label={`${goal.title} progress`}>
+                            <span style={{ width: `${progress}%` }} />
                           </div>
                         </div>
                         <div className="d-goal-actions">
