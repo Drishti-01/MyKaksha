@@ -144,7 +144,7 @@ export async function seedDefaultRooms() {
           lastActiveAt: new Date(),
         },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     );
   }
   console.log("[roomStore] Default rooms seeded into MongoDB");
@@ -336,7 +336,7 @@ export async function leaveRoomForUser(userId, roomId) {
     const updated = await Room.findByIdAndUpdate(
       roomId,
       { $pull: { members: { userId } }, $set: { lastActiveAt: new Date() } },
-      { new: true }
+      { returnDocument: "after" }
     ).lean();
     return updated ? toPlainRoom(updated) : null;
   }
@@ -356,7 +356,7 @@ export async function saveRoomSharedNotes(roomId, content) {
     const updated = await Room.findByIdAndUpdate(
       roomId,
       { sharedNotes: text, lastActiveAt: new Date() },
-      { new: true }
+      { returnDocument: "after" }
     ).lean();
     if (!updated) {
       const err = new Error("Room not found");
@@ -384,13 +384,28 @@ export async function createRoomSessionEntry({ roomId, userId, userName }) {
   const date = todayKey(joinedAt);
   const mongo = await isMongoUsable();
   if (mongo) {
+    // $setOnInsert: only runs on INSERT (new document) — no overlap with $set
+    // $set: always runs on both insert and update
+    // Fields must NOT appear in both operators — MongoDB throws ConflictingUpdateOperators
     return RoomSession.findOneAndUpdate(
       { roomId, userId, date },
       {
-        $setOnInsert: { roomId, userId, userName, date, joinedAt, leftAt: null, totalFocusMinutes: 0, totalMinutes: 0, sessionsCompleted: 0, lastActive: joinedAt },
-        $set: { userName, joinedAt, leftAt: null, lastActive: joinedAt },
+        $setOnInsert: {
+          roomId,
+          userId,
+          date,
+          totalFocusMinutes: 0,
+          totalMinutes: 0,
+          sessionsCompleted: 0,
+        },
+        $set: {
+          userName,
+          joinedAt,
+          leftAt: null,
+          lastActive: joinedAt,
+        },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     ).lean();
   }
 
@@ -422,7 +437,7 @@ export async function closeRoomSessionEntry({ roomId, userId, extraCompletedSess
     return RoomSession.findOneAndUpdate(
       { roomId, userId, date },
       { $set: { leftAt, lastActive: leftAt }, $inc: { totalMinutes: segmentMinutes, totalFocusMinutes: segmentMinutes, sessionsCompleted: Math.max(0, Number(extraCompletedSessions) || 0) } },
-      { new: true }
+      { returnDocument: "after" }
     ).lean();
   }
 
@@ -456,7 +471,7 @@ export async function upsertUserRoomStats({ roomId, userId, userName, deltaMinut
         $inc: { totalFocusMinutes: safeMinutes, sessionsCompleted: safeSessions, weeklyMinutes: safeMinutes, focusPoints: deltaPoints },
         $set: { lastActive: new Date() },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     ).lean();
 
     await Room.findByIdAndUpdate(roomId, {

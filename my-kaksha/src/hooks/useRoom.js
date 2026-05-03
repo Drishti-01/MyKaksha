@@ -8,8 +8,12 @@ const myRoomsCache = {
 };
 
 // Attempt to hydrate cache from localStorage for instant UI
+// Cache key v2 — bumped to invalidate old seed-dsa string IDs
+const CACHE_KEY = "myRooms_cache_v2";
 try {
-  const raw = localStorage.getItem("myRooms_cache_v1");
+  // Clear old v1 cache that may contain stale seed-dsa IDs
+  localStorage.removeItem("myRooms_cache_v1");
+  const raw = localStorage.getItem(CACHE_KEY);
   if (raw) {
     const parsed = JSON.parse(raw);
     if (parsed && Array.isArray(parsed.rooms)) {
@@ -46,7 +50,7 @@ export async function syncMyRooms() {
   }, {});
   myRoomsCache.loadedAt = Date.now();
   try {
-    localStorage.setItem("myRooms_cache_v1", JSON.stringify({ rooms, loadedAt: myRoomsCache.loadedAt }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ rooms, loadedAt: myRoomsCache.loadedAt }));
   } catch (e) {
     // ignore storage errors
   }
@@ -66,7 +70,7 @@ export function rememberRoom(roomId, roomName) {
   };
   try {
     const rooms = myRoomsCache.ids.map((id) => ({ id, name: myRoomsCache.meta?.[id]?.roomName || "Room", lastActiveAt: myRoomsCache.meta?.[id]?.lastActiveAt }));
-    localStorage.setItem("myRooms_cache_v1", JSON.stringify({ rooms, loadedAt: myRoomsCache.loadedAt || Date.now() }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ rooms, loadedAt: myRoomsCache.loadedAt || Date.now() }));
   } catch (e) {
     // ignore storage errors
   }

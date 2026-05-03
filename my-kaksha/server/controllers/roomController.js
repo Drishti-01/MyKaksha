@@ -332,14 +332,12 @@ export async function trackSessionComplete(req, res) {
       $setOnInsert: {
         roomId,
         userId,
-        userName,
         date,
         joinedAt: new Date(),
         leftAt: null,
         totalFocusMinutes: 0,
         totalMinutes: 0,
         sessionsCompleted: 0,
-        lastActive: new Date(),
       },
       $inc: {
         totalFocusMinutes: deltaMinutes,
@@ -351,7 +349,7 @@ export async function trackSessionComplete(req, res) {
         lastActive: new Date(),
       },
     },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: "after" }
   ).lean();
 
   const stats = await upsertUserRoomStats({

@@ -62,7 +62,7 @@ export async function replaceProjectForUser(userId, projectId, project) {
       ...normalizeProject(project),
       updatedAt: new Date(),
     },
-    { new: true }
+    { returnDocument: "after" }
   ).lean();
 
   if (!updated) {
@@ -81,7 +81,7 @@ export async function patchProjectStatusForUser(userId, projectId, status) {
       status: ALLOWED_STATUSES.has(status) ? status : "In Progress",
       updatedAt: new Date(),
     },
-    { new: true }
+    { returnDocument: "after" }
   ).lean();
 
   if (!updated) {

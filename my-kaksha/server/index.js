@@ -360,7 +360,7 @@ io.on("connection", (socket) => {
         await Room.findByIdAndUpdate(
           roomId,
           { sharedNotes: content, lastActiveAt: new Date() },
-          { new: true }
+          { returnDocument: "after" }
         );
       }
     } catch (err) {
