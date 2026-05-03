@@ -27,6 +27,10 @@ const css = `
   .pt-shell.collapsed { grid-template-columns: 94px 1fr; }
   .pt-main { min-width: 0; height: 100vh; overflow-y: auto; }
 
+  @media (max-width: 780px) {
+    .pt-shell, .pt-shell.collapsed { grid-template-columns: 1fr; }
+  }
+
   .pt-page {
     min-height: 100vh; padding: 32px 48px 80px;
     background: #FAF8F3; font-family: 'Poppins', sans-serif;
@@ -193,12 +197,14 @@ const css = `
   .pt-empty-desc { font-size: 0.88rem; color: #C8B6A6; }
 
   @media (max-width: 900px) {
-    .pt-shell, .pt-shell.collapsed { grid-template-columns: 1fr; }
     .pt-page { padding: 80px 24px 60px; }
     .pt-title { font-size: 2.2rem; }
     .pt-grid { grid-template-columns: 1fr 1fr; }
     .pt-form-grid { grid-template-columns: 1fr; }
     .pt-form-full { grid-column: 1; }
+  }
+  @media (max-width: 780px) {
+    .pt-shell, .pt-shell.collapsed { grid-template-columns: 1fr; }
   }
   @media (max-width: 600px) {
     .pt-grid { grid-template-columns: 1fr; }
@@ -281,6 +287,21 @@ export default function ProjectTracker() {
     inProgress: projects.filter((project) => project.status === "In Progress").length,
   };
   const navItems = ["Dashboard", "Analytics", "Projects", "Study Group"];
+
+  function handleNav(item) {
+    if (item === "Projects") return;
+    if (item === "Dashboard") {
+      navigate("/dashboard");
+      return;
+    }
+    if (item === "Analytics") {
+      navigate("/analytics");
+      return;
+    }
+    if (item === "Study Group") {
+      navigate("/study-group");
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -403,20 +424,7 @@ export default function ProjectTracker() {
           onToggle={() => setCollapsed((prev) => !prev)}
           navItems={navItems}
           activeItem="Projects"
-          onNavigate={(item) => {
-            if (item === "Projects") return;
-            if (item === "Dashboard") {
-              navigate("/dashboard");
-              return;
-            }
-            if (item === "Analytics") {
-              navigate("/analytics");
-              return;
-            }
-            if (item === "Study Group") {
-              navigate("/study-group");
-            }
-          }}
+          onNavigate={handleNav}
           primaryAction={{ label: "Back to Home", onClick: () => navigate("/") }}
           secondaryAction={{
             label: "Sign Out",

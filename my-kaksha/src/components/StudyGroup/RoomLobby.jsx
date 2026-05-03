@@ -144,19 +144,15 @@ export default function RoomLobby() {
     rememberRoom(id, room?.name);
     try { localStorage.setItem("lastJoinedRoom", JSON.stringify({ id, name: room?.name || "Room" })); } catch { /* ignore */ }
 
-    // Only call join API if user is not already a member
-    // Members are stored permanently in MongoDB — no need to re-join on every visit
-    const alreadyMember = (room?.members || []).some((m) => m.userId === user?.id);
-    if (!alreadyMember) {
-      try {
-        await joinRoomByIdApi(id);
-        console.log("[RoomLobby] joined roomId:", id);
-      } catch (e) {
-        console.warn("[RoomLobby] joinRoomByIdApi failed (non-fatal):", e.message);
-      }
-    } else {
-      console.log("[RoomLobby] already a member of roomId:", id, "— skipping join API");
+    // Always call join API to ensure user is added as permanent member in MongoDB
+    // The backend handles duplicate prevention — if already a member, it's a no-op
+    try {
+      await joinRoomByIdApi(id);
+      console.log("[RoomLobby] joined roomId:", id);
+    } catch (e) {
+      console.warn("[RoomLobby] joinRoomByIdApi failed (non-fatal):", e.message);
     }
+    
     navigate(`/study-group/${id}`);
   }
 
