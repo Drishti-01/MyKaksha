@@ -194,17 +194,23 @@ io.on("connection", (socket) => {
       });
 
       // Add user to Room.members in MongoDB
-      // Filter: only update if this userId is NOT already in members array
-      // $push adds the member subdocument — avoids full-object equality issue of $addToSet
+      // Use $or to handle BOTH cases: empty array AND array where userId not present
+      // { "members.userId": { $ne: userId } } fails on empty arrays in some MongoDB versions
       try {
         const updateResult = await Room.updateOne(
-          { _id: roomId, "members.userId": { $ne: userId } },
+          {
+            _id: roomId,
+            $or: [
+              { members: { $size: 0 } },
+              { "members.userId": { $ne: userId } },
+            ],
+          },
           {
             $push: { members: { userId, name: username, joinedAt: new Date() } },
             $set: { lastActiveAt: new Date(), isActive: true },
           }
         );
-        console.log(`[socket] join-room: Room.updateOne result — matched=${updateResult.matchedCount} modified=${updateResult.modifiedCount} userId=${userId} roomId=${roomId}`);
+        console.log(`[socket] join-room: Room.updateOne matched=${updateResult.matchedCount} modified=${updateResult.modifiedCount} userId=${userId} roomId=${roomId}`);
       } catch (memberErr) {
         console.error("[socket] join-room: Room.updateOne FAILED:", memberErr?.message, memberErr);
       }
@@ -508,15 +514,9 @@ io.on("connection", (socket) => {
 
     try {
       const closed = await closeRoomSessionEntry({ roomId, userId });
-      if (closed && closed.totalMinutes > 0) {
-        await upsertUserRoomStats({
-          roomId,
-          userId,
-          userName: username,
-          deltaMinutes: closed.totalMinutes,
-          deltaSessions: closed.sessionsCompleted || 0,
-        });
-      }
+      // Do NOT add raw session time to focus stats on disconnect
+      // Focus minutes are only tracked via trackSessionComplete (Pomodoro completion)
+      // We just close the session record cleanly
 
       const starter = timerStarterByRoom.get(roomId);
       if (starter?.userId === userId) {

@@ -266,14 +266,21 @@ export async function joinRoomById(req, res) {
   if (!room) return fail(res, 404, "Room not found");
 
   // Only push if userId not already in members array
+  // Use $or to handle both empty array and non-member cases
   const updateResult = await Room.updateOne(
-    { _id: roomId, "members.userId": { $ne: userId } },
+    {
+      _id: roomId,
+      $or: [
+        { members: { $size: 0 } },
+        { "members.userId": { $ne: userId } },
+      ],
+    },
     {
       $push: { members: { userId, name: userName, joinedAt: new Date() } },
       $set: { lastActiveAt: new Date(), isActive: true },
     }
   );
-  console.log(`[joinRoomById] Room.updateOne result — matched=${updateResult.matchedCount} modified=${updateResult.modifiedCount} userId=${userId} roomId=${roomId}`);
+  console.log(`[joinRoomById] Room.updateOne matched=${updateResult.matchedCount} modified=${updateResult.modifiedCount} userId=${userId} roomId=${roomId}`);
 
   await createRoomSessionEntry({ roomId, userId, userName });
   await markRoomActivity(roomId);

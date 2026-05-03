@@ -437,9 +437,17 @@ export async function closeRoomSessionEntry({ roomId, userId, extraCompletedSess
     const session = await RoomSession.findOne({ roomId, userId, date, leftAt: null }).lean();
     if (!session) return null;
     const segmentMinutes = session.joinedAt ? minutesBetween(session.joinedAt, leftAt) : 0;
+    // Only update totalMinutes (raw time in room) — NOT totalFocusMinutes
+    // totalFocusMinutes is only updated by trackSessionComplete (Pomodoro completion)
     return RoomSession.findOneAndUpdate(
       { roomId, userId, date },
-      { $set: { leftAt, lastActive: leftAt }, $inc: { totalMinutes: segmentMinutes, totalFocusMinutes: segmentMinutes, sessionsCompleted: Math.max(0, Number(extraCompletedSessions) || 0) } },
+      {
+        $set: { leftAt, lastActive: leftAt },
+        $inc: {
+          totalMinutes: segmentMinutes,
+          sessionsCompleted: Math.max(0, Number(extraCompletedSessions) || 0),
+        },
+      },
       { returnDocument: "after" }
     ).lean();
   }

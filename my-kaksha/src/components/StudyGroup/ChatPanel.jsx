@@ -48,6 +48,7 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
   const [hasOlder, setHasOlder] = useState(true);
   const boxRef = useRef(null);
   const typingTimerRef = useRef(null);
+  const sendTimeoutRef = useRef(null);
 
   const newestTimestamp = useMemo(() => messages[messages.length - 1]?.timestamp, [messages]);
   const oldestTimestamp = useMemo(() => messages[0]?.timestamp, [messages]);
@@ -91,19 +92,24 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
     const socket = socketRef?.current;
     if (!socket) return;
 
+    // Re-register listeners whenever socket instance changes
+    // socketRef is a ref so we read .current directly here
+
     const onReceive = (incoming) => {
       const msg = normalizeIncoming(incoming);
-      setMessages((prev) => upsertIncoming(prev, msg));
-      // If this message is from the current user it confirms delivery — re-enable send
-      try {
-        if ((msg.sender?.userId || "") === String(meUserId)) {
-          setSending(false);
-          setText("");
+      // Always reset sending state when we get any message from ourselves
+      // Do this BEFORE dedup check so it always fires
+      if ((msg.sender?.userId || "") === String(meUserId)) {
+        setSending(false);
+        setText("");
+        // Clear the safety timeout
+        if (sendTimeoutRef.current) {
+          clearTimeout(sendTimeoutRef.current);
+          sendTimeoutRef.current = null;
         }
-      } catch (e) {
-        console.error("ChatPanel:onReceive re-enable send error", e);
       }
-      if (!isActiveTab && msg.sender.userId !== meUserId) {
+      setMessages((prev) => upsertIncoming(prev, msg));
+      if (!isActiveTab && (msg.sender?.userId || "") !== String(meUserId)) {
         onUnreadChange?.((v) => (v || 0) + 1);
       }
     };
@@ -153,6 +159,10 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
     // Listen for message-error so sending state is never stuck
     const onMessageError = () => {
       setSending(false);
+      if (sendTimeoutRef.current) {
+        clearTimeout(sendTimeoutRef.current);
+        sendTimeoutRef.current = null;
+      }
     };
     socket.on("message-error", onMessageError);
 
@@ -200,56 +210,42 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
   async function sendMessage(rawText, retryId) {
     const value = String(rawText || "").trim();
     if (!value || chatPaused) return;
-    const fallbackToRest = async () => {
-      const data = await sendRoomMessageApi(roomId, value, "user");
-      const sent = normalizeIncoming(data.message);
-      setMessages((prev) => {
-        if (retryId) {
-          return dedupeMessages(prev.map((m) => (m.id === retryId ? sent : m)));
-        }
-        // Append server-saved message if not already present
-        const exists = prev.find((m) => (m.serverId || m.id) === (sent.serverId || sent.id));
-        if (exists) return prev;
-        return dedupeMessages([...prev, sent]);
-      });
-    };
 
-    try {
-      const socket = socketRef?.current;
-      // If socket not available, fallback to REST API
-      if (!socket || !socket.connected) {
-        console.log("ChatPanel: socket unavailable, falling back to REST for sendMessage");
-        await fallbackToRest();
-        return;
-      }
+    const socket = socketRef?.current;
 
-      // Use socket-only send. Do not add optimistic message locally —
-      // server will persist and broadcast 'receive-message' to all clients (including sender).
-      setSending(true);
-      // 5-second timeout fallback — if receive-message never arrives, re-enable send
-      const sendTimeout = setTimeout(() => {
-        setSending(false);
-        console.warn("ChatPanel: send-message timeout — no receive-message after 5s");
-      }, 5000);
+    // If socket not connected, fall back to REST
+    if (!socket || !socket.connected) {
+      console.log("[ChatPanel] socket not connected, using REST fallback");
       try {
-        // BUG 2 FIX — emit 'content' field (server now reads both content and text)
-        socket.emit("send-message", { roomId, content: value, type: "user" });
-        setText("");
-        // sendTimeout will clear itself when receive-message fires and setSending(false) is called
-        // We store it so we can cancel it if receive-message arrives first
-        // (The onReceive handler calls setSending(false) which is enough)
-        // Clear timeout after a short delay to avoid memory leak if message arrives fast
-        setTimeout(() => clearTimeout(sendTimeout), 6000);
+        const data = await sendRoomMessageApi(roomId, value, "user");
+        const sent = normalizeIncoming(data.message);
+        setMessages((prev) => {
+          if (retryId) return dedupeMessages(prev.map((m) => (m.id === retryId ? sent : m)));
+          const exists = prev.find((m) => (m.serverId || m.id) === (sent.serverId || sent.id));
+          if (exists) return prev;
+          return dedupeMessages([...prev, sent]);
+        });
       } catch (e) {
-        clearTimeout(sendTimeout);
-        console.error("ChatPanel: socket emit failed, falling back to REST", e);
-        await fallbackToRest();
-        setSending(false);
+        console.error("[ChatPanel] REST fallback failed:", e.message);
       }
-    } catch (e) {
-      console.error("ChatPanel: sendMessage error", e);
-      setSending(false);
+      return;
     }
+
+    // Send via socket — server will broadcast receive-message back to all including sender
+    setSending(true);
+    setText("");
+
+    // Safety timeout — if receive-message never arrives, unlock the button
+    const timeout = setTimeout(() => {
+      setSending(false);
+      console.warn("[ChatPanel] send timeout — no receive-message after 8s");
+    }, 8000);
+
+    // Store timeout so onReceive can clear it
+    sendTimeoutRef.current = timeout;
+
+    console.log(`[ChatPanel] emitting send-message roomId=${roomId} len=${value.length}`);
+    socket.emit("send-message", { roomId, content: value, type: "user" });
   }
 
   function handleSubmit(e) {
