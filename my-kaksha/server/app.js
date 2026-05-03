@@ -71,6 +71,13 @@ export function createApp({ io } = {}) {
     next();
   });
 
+  // No-cache middleware for all /api routes — prevents 304 "Not Modified" responses
+  // Browser caches GET responses using ETags; this forces fresh data every request
+  app.use("/api", (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    next();
+  });
+
   if (io) {
     app.use((req, _res, next) => {
       req.io = io;

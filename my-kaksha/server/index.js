@@ -11,6 +11,7 @@ import "dotenv/config";
 import { createApp } from "./app.js";
 import { ensureDatabaseConnection } from "./config/database.js";
 import Room from "./models/Room.js";
+import { seedDefaultRooms } from "./services/roomStore.js";
 import { createChatMessage, readRecentChatMessages } from "./services/chatStore.js";
 import { AUTH_COOKIE_NAME, verifyAuthToken } from "./utils/auth.js";
 import {
@@ -483,9 +484,10 @@ io.on("connection", (socket) => {
 });
 
 server.listen(PORT, async () => {
-  // Connect to MongoDB on startup
+  // Connect to MongoDB on startup and seed default rooms
   try {
     await ensureDatabaseConnection();
+    await seedDefaultRooms();
   } catch (err) {
     console.error("[Startup] MongoDB connection failed:", err.message);
   }
