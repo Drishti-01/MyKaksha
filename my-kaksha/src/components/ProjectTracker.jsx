@@ -18,13 +18,14 @@ const css = `
   body { font-family:'Poppins',sans-serif; background:#FAF8F3; color:#5a4a3a; overflow-x:hidden; }
 
   .pt-shell {
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     display: grid;
     grid-template-columns: 280px 1fr;
     background: #FAF8F3;
   }
   .pt-shell.collapsed { grid-template-columns: 94px 1fr; }
-  .pt-main { min-width: 0; }
+  .pt-main { min-width: 0; height: 100vh; overflow-y: auto; }
 
   .pt-page {
     min-height: 100vh; padding: 32px 48px 80px;

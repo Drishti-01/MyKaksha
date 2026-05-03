@@ -16,6 +16,8 @@ const css = `
 
   .a-shell {
     min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     display: grid;
     grid-template-columns: 280px 1fr;
     background: radial-gradient(circle at top right, #f3e8da 0%, #faf8f3 42%);
@@ -31,7 +33,8 @@ const css = `
     display: flex;
     flex-direction: column;
     gap: 20px;
-    min-height: 100vh;
+    height: 100vh;
+    overflow-y: auto;
     position: sticky;
     top: 0;
   }
@@ -101,7 +104,7 @@ const css = `
   }
   .a-back-btn:hover { background: #fffdf9;; }
 
-  .a-main { padding: 26px; overflow: hidden; }
+  .a-main { padding: 26px; overflow-y: auto; height: 100vh; min-width: 0; }
   .a-head-wrap {
     position: relative;
     background: linear-gradient(130deg, #fffdf9, #f7f0e6);
