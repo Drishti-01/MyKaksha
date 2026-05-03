@@ -6,6 +6,8 @@
 
 .sg2-shell {
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 280px 1fr;
   background: radial-gradient(circle at top right, #f3e8da 0%, #faf8f3 42%);
@@ -19,7 +21,9 @@
 
 .sg2-main {
   padding: 28px 32px 40px;
-  min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
+  min-width: 0;
 }
 
 .sg2-title {

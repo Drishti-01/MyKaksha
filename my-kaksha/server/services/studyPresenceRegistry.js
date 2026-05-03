@@ -42,12 +42,17 @@ export function getLobbySocketCount() {
   return lobbySocketIds.size;
 }
 
-/** Unique user count: lobby sockets + any socket present in a room (approximation for demo). */
+/** Count of unique users actually in study rooms (not just browsing lobby).
+ * Lobby browsers are excluded — only users who have joined a room are counted. */
 export function getGlobalStudyingApproxCount() {
-  const seen = new Set([...lobbySocketIds]);
+  const seen = new Set();
   for (const map of roomPresence.values()) {
     for (const m of map.values()) {
-      seen.add(m.socketId);
+      // Only count users whose status is not offline/invisible
+      const status = displayStatusForViewer(m, false);
+      if (status !== "offline") {
+        seen.add(m.userId || m.socketId);
+      }
     }
   }
   return seen.size;

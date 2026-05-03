@@ -188,8 +188,9 @@ io.on("connection", (socket) => {
         appearInLeaderboard: privacy.appearInLeaderboard !== false,
       });
 
-      // BUG 1 FIX — add user to Room.members array in MongoDB via $addToSet
-      // $addToSet prevents duplicate entries if user rejoins
+      // Add user to Room.members in MongoDB via $addToSet
+      // $addToSet prevents duplicate entries if user rejoins the same room
+      // Schema: roomMemberSchema has { userId, name, joinedAt } — match exactly
       try {
         await Room.findByIdAndUpdate(
           roomId,
@@ -389,17 +390,12 @@ io.on("connection", (socket) => {
     const content = typeof payload.content === "string" ? payload.content : "";
     if (!roomId) return;
 
-    // MongoDB verified — persist shared notes to Room document in MongoDB
-    // Non-seed rooms: Room.findByIdAndUpdate saves notes to MongoDB
-    // Seed rooms: overlay file used as fallback (seed rooms have no MongoDB _id)
+    // Persist shared notes to Room document in MongoDB
     try {
-      if (!roomId.startsWith("seed-")) {
-        await Room.findByIdAndUpdate(
-          roomId,
-          { sharedNotes: content, lastActiveAt: new Date() },
-          { returnDocument: "after" }
-        );
-      }
+      await Room.findByIdAndUpdate(
+        roomId,
+        { sharedNotes: content, lastActiveAt: new Date() }
+      );
     } catch (err) {
       console.warn("[notes-sync] MongoDB save failed:", err?.message || err);
     }

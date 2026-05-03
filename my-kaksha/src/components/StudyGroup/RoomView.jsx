@@ -199,6 +199,14 @@ export default function RoomView() {
       emitJoin();
     });
 
+    socket.on("connect_error", (err) => {
+      console.error("[socket] Connection error in RoomView:", err.message);
+      // If auth failed, redirect to login
+      if (err.message === "Authentication required" || err.message === "Invalid token") {
+        navigate("/login", { replace: true });
+      }
+    });
+
     socket.on("disconnect", () => {
       joinSentRef.current = false;
       setReconnecting(true);

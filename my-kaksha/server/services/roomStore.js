@@ -120,13 +120,16 @@ function toPlainRoom(doc) {
 }
 
 // Seed the 5 default rooms into MongoDB using stable UUIDs as _id
-// Uses upsert so re-running never creates duplicates
+// Uses upsert by CODE so it always runs regardless of collection state
+// This means CASA and other user rooms are never affected
 export async function seedDefaultRooms() {
   const mongo = await isMongoUsable();
   if (!mongo) return;
   for (const spec of SEED_ROOMS_SPEC) {
+    // Upsert by code — if room with this code exists, do nothing ($setOnInsert only runs on insert)
+    // If it doesn't exist, create it with the stable UUID _id
     await Room.findOneAndUpdate(
-      { _id: spec.id },
+      { code: spec.code },
       {
         $setOnInsert: {
           _id: spec.id,
@@ -147,7 +150,7 @@ export async function seedDefaultRooms() {
       { upsert: true, returnDocument: "after" }
     );
   }
-  console.log("[roomStore] Default rooms seeded into MongoDB");
+  console.log("[roomStore] Default rooms seeded/verified in MongoDB");
 }
 
 async function readFileStore() {

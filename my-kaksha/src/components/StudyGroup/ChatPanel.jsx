@@ -141,7 +141,16 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
     socket.on("user-joined-room", onSystem);
     socket.on("user-left-room", onSystem);
 
-    // BUG 2 FIX — listen for message-error so sending state is never stuck
+    // Listen for chat history sent by server on room join
+    const onChatHistory = (history) => {
+      if (!Array.isArray(history)) return;
+      const normalized = dedupeMessages(history.map(normalizeIncoming));
+      setMessages(normalized);
+      setHasOlder(normalized.length >= 50);
+    };
+    socket.on("chat-history", onChatHistory);
+
+    // Listen for message-error so sending state is never stuck
     const onMessageError = () => {
       setSending(false);
     };
@@ -155,6 +164,7 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
       socket.off("typing-stop", onTypingStop);
       socket.off("user-joined-room", onSystem);
       socket.off("user-left-room", onSystem);
+      socket.off("chat-history", onChatHistory);
       socket.off("message-error", onMessageError);
     };
   }, [socketRef, roomId, isActiveTab, meUserId, onUnreadChange]);
