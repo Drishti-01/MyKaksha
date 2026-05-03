@@ -562,16 +562,18 @@ function loadFocusStats() {
   try {
     const raw = globalThis.localStorage?.getItem(FOCUS_STATS_STORAGE_KEY);
     if (!raw) {
-      return { dailyCompleted: {}, totalFocusSeconds: 0 };
+      return { dailyCompleted: {}, totalFocusSeconds: 0, dailyActiveByUser: {} };
     }
     const parsed = JSON.parse(raw);
     return {
       dailyCompleted:
         parsed?.dailyCompleted && typeof parsed.dailyCompleted === "object" ? parsed.dailyCompleted : {},
       totalFocusSeconds: Number(parsed?.totalFocusSeconds) || 0,
+      dailyActiveByUser:
+        parsed?.dailyActiveByUser && typeof parsed.dailyActiveByUser === "object" ? parsed.dailyActiveByUser : {},
     };
   } catch {
-    return { dailyCompleted: {}, totalFocusSeconds: 0 };
+    return { dailyCompleted: {}, totalFocusSeconds: 0, dailyActiveByUser: {} };
   }
 }
 
@@ -658,6 +660,7 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
     []
   );
   const todayKey = useMemo(() => getDateKey(), []);
+  const streakUserKey = useMemo(() => user?.id || user?.email || "guest", [user]);
   const projectStats = useMemo(() => {
     const total = projectsSnapshot.length;
     const completed = projectsSnapshot.filter((project) => project.status === "Completed").length;
@@ -673,14 +676,35 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
   }, [projectsSnapshot]);
   const productivityStats = useMemo(() => {
     const sessionsToday = Number(focusStats.dailyCompleted?.[todayKey]) || 0;
-    const streak = Math.max(0, Number(user?.streakDays) || 0);
+    const userActiveDays = focusStats.dailyActiveByUser?.[streakUserKey] ?? {};
+    const streakSource = Object.keys(userActiveDays).length > 0 ? userActiveDays : (focusStats.dailyCompleted ?? {});
+    const streak = calculateStreak(streakSource, todayKey);
 
     return {
       streak,
       sessionsToday,
       totalFocusTime: formatFocusDuration(focusStats.totalFocusSeconds || 0),
     };
-  }, [focusStats, todayKey, user?.streakDays]);
+  }, [focusStats, todayKey, streakUserKey]);
+
+  useEffect(() => {
+    if (!streakUserKey || streakUserKey === "guest") return;
+    setFocusStats((prev) => {
+      const byUser = prev.dailyActiveByUser ?? {};
+      const currentUserDays = byUser[streakUserKey] ?? {};
+      if (currentUserDays[todayKey]) return prev;
+      return {
+        ...prev,
+        dailyActiveByUser: {
+          ...byUser,
+          [streakUserKey]: {
+            ...currentUserDays,
+            [todayKey]: 1,
+          },
+        },
+      };
+    });
+  }, [streakUserKey, todayKey]);
 
   useEffect(() => {
     let mounted = true;
