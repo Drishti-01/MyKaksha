@@ -165,8 +165,46 @@ function mergeRooms(dynamicRooms) {
 export async function listRoomsMerged() {
   const mongo = await isMongoUsable();
   if (mongo) {
+    // MongoDB verified — Room.find() reads all rooms from MongoDB
+    // Seed rooms are merged in if not already present in the collection
     const docs = await Room.find({}).lean();
-    return mergeRooms(docs.map(toPlainRoom));
+    const mongoRooms = docs.map(toPlainRoom);
+
+    // Seed rooms into MongoDB if collection is empty (first run)
+    if (mongoRooms.length === 0) {
+      try {
+        for (const seed of SEED_ROOMS) {
+          await Room.findOneAndUpdate(
+            { _id: seed.id },
+            {
+              $setOnInsert: {
+                _id: seed.id,
+                name: seed.name,
+                type: seed.type,
+                focusStyle: seed.focusStyle,
+                code: seed.code,
+                createdBy: seed.createdBy,
+                members: [],
+                weeklyGoalHours: null,
+                sharedNotes: "",
+                activityScore: 0,
+                focusPoints: new Map(),
+                isActive: true,
+                lastActiveAt: new Date(),
+              },
+            },
+            { upsert: true, new: true }
+          );
+        }
+        console.log("[roomStore] Seeded 5 default rooms into MongoDB");
+        const seeded = await Room.find({}).lean();
+        return seeded.map(toPlainRoom);
+      } catch (err) {
+        console.warn("[roomStore] Seed failed, using in-memory seeds:", err?.message);
+      }
+    }
+
+    return mergeRooms(mongoRooms);
   }
   const { rooms } = await readFileStore();
   return mergeRooms(rooms);

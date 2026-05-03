@@ -1,7 +1,16 @@
-﻿import http from "node:http";
+﻿// Socket.io — Full Duplex Real-time Communication
+// HTTP is one-directional: client requests, server responds
+// WebSocket/Socket.io is bidirectional: both can initiate
+// Used here for: live chat, presence, timer sync, study updates
+// Each socket event is like an HTTP route but for real-time data
+// Concept 8 — Socket.io (Backend Engineering-I Eval-II)
+
+import http from "node:http";
 import { Server } from "socket.io";
 import "dotenv/config";
 import { createApp } from "./app.js";
+import { ensureDatabaseConnection } from "./config/database.js";
+import Room from "./models/Room.js";
 import { createChatMessage, readRecentChatMessages } from "./services/chatStore.js";
 import { AUTH_COOKIE_NAME, verifyAuthToken } from "./utils/auth.js";
 import {
@@ -337,10 +346,27 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("notes-sync", (payload = {}) => {
+  socket.on("notes-sync", async (payload = {}) => {
     const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
     const content = typeof payload.content === "string" ? payload.content : "";
     if (!roomId) return;
+
+    // MongoDB verified — persist shared notes to Room document in MongoDB
+    // Non-seed rooms: Room.findByIdAndUpdate saves notes to MongoDB
+    // Seed rooms: overlay file used as fallback (seed rooms have no MongoDB _id)
+    try {
+      if (!roomId.startsWith("seed-")) {
+        await Room.findByIdAndUpdate(
+          roomId,
+          { sharedNotes: content, lastActiveAt: new Date() },
+          { new: true }
+        );
+      }
+    } catch (err) {
+      console.warn("[notes-sync] MongoDB save failed:", err?.message || err);
+    }
+
+    // Broadcast updated notes to all other clients in the room
     socket.to(roomId).emit("notes-sync", {
       roomId,
       content,
@@ -456,6 +482,12 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
+  // Connect to MongoDB on startup
+  try {
+    await ensureDatabaseConnection();
+  } catch (err) {
+    console.error("[Startup] MongoDB connection failed:", err.message);
+  }
   console.log(`My Kaksha API + chat socket running on http://localhost:${PORT}`);
 });

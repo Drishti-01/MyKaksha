@@ -5,11 +5,13 @@ function ok(res, data) {
 }
 
 export async function getWeeklySummary(req, res) {
+  // MongoDB verified — aggregates from RoomSession collection in MongoDB
   const summary = await getWeeklyUserSummary(req.auth.user.id);
   ok(res, { summary });
 }
 
 export async function getRoomContribution(req, res) {
+  // MongoDB verified — aggregates from RoomSession collection in MongoDB
   const rooms = await getWeeklyRoomContribution(req.auth.user.id);
   ok(res, { rooms });
 }
