@@ -8,6 +8,7 @@ import {
   getNotes,
   getRoom,
   getRoomLeaderboard,
+  listMyRooms,
   getRoomStatsController,
   getRoomStudyTimes,
   joinRoomByCode,
@@ -23,6 +24,7 @@ const router = Router();
 router.use(requireAuth);
 
 router.get("/", asyncHandler(listRooms));
+router.get("/my-rooms", asyncHandler(listMyRooms));
 router.post("/", asyncHandler(createRoom));
 router.post("/join/:code", asyncHandler(joinRoomByCode));
 router.get("/:id", asyncHandler(getRoom));

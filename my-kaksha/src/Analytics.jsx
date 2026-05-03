@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchStudyData } from "./api/studyData";
+import { fetchRoomContributionApi, fetchWeeklySummaryApi } from "./api/rooms";
 import { useAuth } from "./auth/useAuth";
 import AppSidebar from "./components/AppSidebar";
 import EmptyStatePrompt from "./components/Analytics/EmptyStatePrompt";
@@ -415,6 +416,8 @@ export default function Analytics() {
     tasks: [],
     taskEvents: {},
   });
+  const [weeklySummary, setWeeklySummary] = useState(null);
+  const [roomContribution, setRoomContribution] = useState([]);
   const [windowSize, setWindowSize] = useState(7);
   const [chartMode, setChartMode] = useState("focus");
 
@@ -426,13 +429,21 @@ export default function Analytics() {
     }
 
     try {
-      const data = await fetchStudyData();
+      const [data, weeklySummaryData, roomContributionData] = await Promise.all([
+        fetchStudyData(),
+        fetchWeeklySummaryApi().catch(() => ({ summary: null })),
+        fetchRoomContributionApi().catch(() => ({ rooms: [] })),
+      ]);
       if (!isMountedRef.current) return;
       setStudyData(data);
+      setWeeklySummary(weeklySummaryData?.summary || null);
+      setRoomContribution(Array.isArray(roomContributionData?.rooms) ? roomContributionData.rooms : []);
       setLoadError("");
     } catch {
       if (!isMountedRef.current) return;
       setStudyData({ goals: [], goalStats: {}, tasks: [], taskEvents: {} });
+      setWeeklySummary(null);
+      setRoomContribution([]);
       setLoadError("Unable to load your analytics right now. Please try refreshing.");
     } finally {
       if (isMountedRef.current) {
@@ -756,9 +767,42 @@ export default function Analytics() {
                 )}
               </section>
 
+              <section className="a-card" style={{ marginTop: 14 }}>
+                <h2 className="a-card-title">Study Group Room Contribution</h2>
+                <p className="a-card-sub">Minutes contributed per room this week (Mongo-backed).</p>
+                {roomContribution.length === 0 ? (
+                  <p className="a-empty">No room contribution data yet this week.</p>
+                ) : (
+                  <table className="a-goal-table">
+                    <thead>
+                      <tr>
+                        <th>Room</th>
+                        <th>Minutes</th>
+                        <th>Sessions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {roomContribution.map((row) => (
+                        <tr key={row.roomId}>
+                          <td>{row.roomName}</td>
+                          <td>{Math.max(0, Number(row.totalMinutes) || 0)}</td>
+                          <td>{Math.max(0, Number(row.sessionsCompleted) || 0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </section>
+
               <StreakTracker series={series} />
               <QuickInsights series={series} rows={rows} totalSeconds={totalSeconds} totalSessions={totalSessions} />
-              <WeeklySummaryCard series={series} rows={rows} totalSeconds={totalSeconds} totalSessions={totalSessions} />
+              <WeeklySummaryCard
+                series={series}
+                rows={rows}
+                totalSeconds={totalSeconds}
+                totalSessions={totalSessions}
+                weeklySummary={weeklySummary}
+              />
             </>
           )}
         </main>

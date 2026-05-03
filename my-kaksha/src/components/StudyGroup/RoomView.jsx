@@ -142,7 +142,6 @@ export default function RoomView() {
       transports: ["websocket", "polling"],
       reconnection: true,
       withCredentials: true,
-      auth: { token: localStorage.getItem("token") || "" },
     });
     socketRef.current = socket;
     joinSentRef.current = false;

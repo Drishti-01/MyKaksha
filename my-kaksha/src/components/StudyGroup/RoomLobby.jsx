@@ -2,7 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { createRoomApi, fetchRoomsList, joinRoomByCodeApi } from "../../api/rooms";
-import { readMyRoomMeta, readMyRooms, rememberRoom } from "../../hooks/useRoom";
+import { rememberRoom, syncMyRooms } from "../../hooks/useRoom";
 import RoomCard from "./RoomCard";
 import CreateRoomModal from "./CreateRoomModal";
 import JoinWithCode from "./JoinWithCode";
@@ -36,21 +36,24 @@ export default function RoomLobby() {
   const [mostActiveToday, setMostActiveToday] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [myRooms, setMyRooms] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-
-  const roomMeta = useMemo(() => readMyRoomMeta(), [rooms.length]);
 
   async function load() {
     setLoading(true);
     setError("");
     try {
-      const data = await fetchRoomsList();
+      const [data, myRoomsData] = await Promise.all([
+        fetchRoomsList(),
+        syncMyRooms().catch(() => []),
+      ]);
       setRooms(Array.isArray(data.rooms) ? data.rooms : []);
       setTrending(Array.isArray(data.trending) ? data.trending : []);
       setMostActiveToday(Array.isArray(data.mostActiveToday) ? data.mostActiveToday : []);
       setLiveCount(Number(data.globalStudyingApprox) || 0);
       setMyTodayMinutes(Number(data.myTodayMinutes) || 0);
+      setMyRooms(Array.isArray(myRoomsData) ? myRoomsData : []);
     } catch (e) {
       setError(e.message || "Failed to load rooms");
     } finally {
@@ -67,7 +70,6 @@ export default function RoomLobby() {
       path: "/socket.io",
       transports: ["websocket", "polling"],
       withCredentials: true,
-      auth: { token: localStorage.getItem("token") || "" },
     });
     lobbySocketRef.current = socket;
     lobbyJoinSentRef.current = false;
@@ -132,10 +134,10 @@ export default function RoomLobby() {
     navigate(`/study-group/${id}`);
   }
 
-  const myRoomsResolved = readMyRooms()
-    .map((id) => rooms.find((r) => r.id === id))
-    .filter(Boolean)
-    .slice(0, 3);
+  const myRoomsResolved = useMemo(
+    () => (Array.isArray(myRooms) ? myRooms.slice(0, 3) : []),
+    [myRooms]
+  );
 
   return (
     <div>
@@ -181,7 +183,7 @@ export default function RoomLobby() {
                     <button type="button" className="sg2-btn secondary" style={{ width: "100%" }} onClick={() => joinRoom(r.id)}>
                       <span>{r.name}</span>
                       <small style={{ marginLeft: 8, opacity: 0.7 }}>
-                        {formatRelative(roomMeta[r.id]?.lastActiveAt)}
+                        {formatRelative(r.lastActiveAt)}
                       </small>
                     </button>
                   </li>

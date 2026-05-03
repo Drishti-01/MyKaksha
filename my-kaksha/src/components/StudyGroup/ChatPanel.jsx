@@ -10,8 +10,11 @@ function formatTs(value) {
 
 function normalizeIncoming(msg) {
   const senderName = msg?.sender?.name || msg?.username || "Guest";
+  const stableId = msg?.id || msg?._id || "";
   return {
-    id: msg.id || `${Date.now()}-${Math.random()}`,
+    id: stableId || `${Date.now()}-${Math.random()}`,
+    serverId: stableId || "",
+    clientMessageId: typeof msg?.clientMessageId === "string" ? msg.clientMessageId : "",
     sender: { userId: msg?.sender?.userId || "guest", name: senderName },
     content: msg.content || msg.text || "",
     timestamp: msg.timestamp || new Date().toISOString(),
@@ -24,7 +27,12 @@ function normalizeIncoming(msg) {
 function dedupeMessages(rows) {
   const seen = new Set();
   return (rows || []).filter((row) => {
-    const key = String(row.id || row.timestamp || row.content || "");
+    const key = String(
+      row.serverId ||
+      row.id ||
+      row.clientMessageId ||
+      `${row.timestamp || ""}-${row.sender?.userId || ""}-${row.content || ""}`
+    );
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -34,6 +42,7 @@ function dedupeMessages(rows) {
 export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPaused, pausedMessage, isActiveTab, onUnreadChange }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
   const [typingName, setTypingName] = useState("");
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(true);
@@ -42,6 +51,23 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
 
   const newestTimestamp = useMemo(() => messages[messages.length - 1]?.timestamp, [messages]);
   const oldestTimestamp = useMemo(() => messages[0]?.timestamp, [messages]);
+
+  function upsertIncoming(prev, incoming) {
+    const msg = normalizeIncoming(incoming);
+    const byServer = msg.serverId || msg.id;
+    if (byServer && prev.some((existing) => (existing.serverId || existing.id) === byServer)) {
+      return prev;
+    }
+    if (msg.clientMessageId) {
+      const pendingIdx = prev.findIndex((existing) => existing.clientMessageId === msg.clientMessageId);
+      if (pendingIdx !== -1) {
+        const next = [...prev];
+        next[pendingIdx] = msg;
+        return dedupeMessages(next);
+      }
+    }
+    return dedupeMessages([...prev, msg]);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -67,7 +93,16 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
 
     const onReceive = (incoming) => {
       const msg = normalizeIncoming(incoming);
-      setMessages((prev) => (prev.some((existing) => existing.id === msg.id) ? prev : [...prev, msg]));
+      setMessages((prev) => upsertIncoming(prev, msg));
+      // If this message is from the current user it confirms delivery — re-enable send
+      try {
+        if ((msg.sender?.userId || "") === String(meUserId)) {
+          setSending(false);
+          setText("");
+        }
+      } catch (e) {
+        console.error("ChatPanel:onReceive re-enable send error", e);
+      }
       if (!isActiveTab && msg.sender.userId !== meUserId) {
         onUnreadChange?.((v) => (v || 0) + 1);
       }
@@ -148,43 +183,45 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
   async function sendMessage(rawText, retryId) {
     const value = String(rawText || "").trim();
     if (!value || chatPaused) return;
-
-    if (retryId) {
-      setMessages((prev) => prev.map((m) => (m.id === retryId ? { ...m, failed: false, pending: true } : m)));
-    }
-
-    const optimistic = retryId
-      ? null
-      : normalizeIncoming({
-          id: `tmp-${Date.now()}-${Math.random()}`,
-          sender: { userId: meUserId, name: meName },
-          content: value,
-          timestamp: new Date().toISOString(),
-          type: "user",
-          pending: true,
-        });
-
-    if (optimistic) {
-      setMessages((prev) => [...prev, optimistic]);
-      setText("");
-    }
-
-    try {
+    const fallbackToRest = async () => {
       const data = await sendRoomMessageApi(roomId, value, "user");
       const sent = normalizeIncoming(data.message);
       setMessages((prev) => {
         if (retryId) {
-          return prev.map((m) => (m.id === retryId ? sent : m));
+          return dedupeMessages(prev.map((m) => (m.id === retryId ? sent : m)));
         }
-        return prev.map((m) => (m.id === optimistic.id ? sent : m));
+        // Append server-saved message if not already present
+        const exists = prev.find((m) => (m.serverId || m.id) === (sent.serverId || sent.id));
+        if (exists) return prev;
+        return dedupeMessages([...prev, sent]);
       });
-    } catch {
-      setMessages((prev) => {
-        if (retryId) {
-          return prev.map((m) => (m.id === retryId ? { ...m, pending: false, failed: true } : m));
-        }
-        return prev.map((m) => (m.id === optimistic.id ? { ...m, pending: false, failed: true } : m));
-      });
+    };
+
+    try {
+      const socket = socketRef?.current;
+      // If socket not available, fallback to REST API
+      if (!socket || !socket.connected) {
+        console.log("ChatPanel: socket unavailable, falling back to REST for sendMessage");
+        await fallbackToRest();
+        return;
+      }
+
+      // Use socket-only send. Do not add optimistic message locally —
+      // server will persist and broadcast 'receive-message' to all clients (including sender).
+      setSending(true);
+      try {
+        socket.emit("send-message", { roomId, content: value, type: "user" });
+        // we will re-enable `sending` when receive-message arrives for this user
+        // also clear input to give instant feedback
+        setText("");
+      } catch (e) {
+        console.error("ChatPanel: socket emit failed, falling back to REST", e);
+        await fallbackToRest();
+        setSending(false);
+      }
+    } catch (e) {
+      console.error("ChatPanel: sendMessage error", e);
+      setSending(false);
     }
   }
 
@@ -266,9 +303,9 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
           onKeyDown={onKeyDown}
           rows={2}
           placeholder={chatPaused ? "Chat paused during focus" : "Type message... Enter to send, Shift+Enter new line"}
-          disabled={chatPaused}
+          disabled={chatPaused || sending}
         />
-        <button type="submit" className="sg2-btn" disabled={chatPaused}>Send</button>
+        <button type="submit" className="sg2-btn" disabled={chatPaused || sending}>{sending ? "Sending..." : "Send"}</button>
       </form>
     </div>
   );

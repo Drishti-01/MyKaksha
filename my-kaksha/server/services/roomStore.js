@@ -618,6 +618,54 @@ export async function getWeeklyUserSummary(userId) {
   };
 }
 
+export async function getWeeklyRoomContribution(userId) {
+  const start = startOfWeek();
+  const rooms = await listRoomsMerged();
+  const roomNameById = new Map(rooms.map((room) => [room.id, room.name]));
+
+  const mongo = await isMongoUsable();
+  if (mongo) {
+    const sessions = await RoomSession.find({ userId, joinedAt: { $gte: start } }).lean();
+    const grouped = new Map();
+    for (const session of sessions) {
+      const key = String(session.roomId || "");
+      if (!key) continue;
+      const prev = grouped.get(key) || { roomId: key, totalMinutes: 0, sessionsCompleted: 0 };
+      prev.totalMinutes += Number(session.totalFocusMinutes ?? session.totalMinutes ?? 0);
+      prev.sessionsCompleted += Number(session.sessionsCompleted || 0);
+      grouped.set(key, prev);
+    }
+    return [...grouped.values()]
+      .map((row) => ({
+        ...row,
+        roomName: roomNameById.get(row.roomId) || "Unknown room",
+      }))
+      .sort((a, b) => (b.totalMinutes || 0) - (a.totalMinutes || 0));
+  }
+
+  const data = await readRoomSessionsFallback();
+  const sessions = (Array.isArray(data.sessions) ? data.sessions : []).filter(
+    (session) => session.userId === userId && new Date(session.joinedAt) >= start
+  );
+
+  const grouped = new Map();
+  for (const session of sessions) {
+    const key = String(session.roomId || "");
+    if (!key) continue;
+    const prev = grouped.get(key) || { roomId: key, totalMinutes: 0, sessionsCompleted: 0 };
+    prev.totalMinutes += Number(session.totalFocusMinutes ?? session.totalMinutes ?? 0);
+    prev.sessionsCompleted += Number(session.sessionsCompleted || 0);
+    grouped.set(key, prev);
+  }
+
+  return [...grouped.values()]
+    .map((row) => ({
+      ...row,
+      roomName: roomNameById.get(row.roomId) || "Unknown room",
+    }))
+    .sort((a, b) => (b.totalMinutes || 0) - (a.totalMinutes || 0));
+}
+
 export async function markRoomActivity(roomId) {
   if (!roomId || roomId.startsWith("seed-")) return;
   const mongo = await isMongoUsable();

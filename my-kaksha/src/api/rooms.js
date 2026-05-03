@@ -19,6 +19,11 @@ export async function fetchRoomsList() {
   return parseJson(response);
 }
 
+export async function fetchMyRoomsApi() {
+  const response = await fetch("/api/rooms/my-rooms", { credentials: "include" });
+  return parseJson(response);
+}
+
 export async function createRoomApi(body) {
   const response = await fetch("/api/rooms", {
     method: "POST",
@@ -127,6 +132,13 @@ export async function recordSessionCompleteApi(roomId, minutes = 25, sessions = 
 
 export async function fetchWeeklySummaryApi() {
   const response = await fetch("/api/analytics/weekly-summary", {
+    credentials: "include",
+  });
+  return parseJson(response);
+}
+
+export async function fetchRoomContributionApi() {
+  const response = await fetch("/api/analytics/room-contribution", {
     credentials: "include",
   });
   return parseJson(response);

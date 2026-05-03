@@ -102,7 +102,7 @@ io.use(async (socket, next) => {
     socket.userName = String(payload.name || "Student");
     socket.sessionId = String(payload.sessionId);
     next();
-  } catch (error) {
+  } catch {
     next(new Error("Invalid token"));
   }
 });
@@ -208,7 +208,7 @@ io.on("connection", (socket) => {
       const stats = await getRoomStats(roomId);
       if (typeof cb === "function") cb({ success: true, roomId, stats });
       socket.emit("room-stats", { roomId, stats });
-    } catch (error) {
+    } catch {
       if (typeof cb === "function") cb({ success: false, message: "stats unavailable" });
     }
   });
@@ -306,7 +306,7 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("typing-stop", { userId: socket.data.userId });
   });
 
-  socket.on("send-message", async (payload = {}) => {
+  socket.on("send-message", async (payload = {}, cb) => {
     const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
     if (!roomId) return;
     const text = String(payload.text || "").trim();
@@ -320,10 +320,20 @@ io.on("connection", (socket) => {
         text,
         type: payload.type === "system" ? "system" : "user",
       });
-      io.to(roomId).emit("receive-message", message);
+      const emittedMessage = {
+        ...message,
+        clientMessageId: typeof payload.clientMessageId === "string" ? payload.clientMessageId : undefined,
+      };
+      io.to(roomId).emit("receive-message", emittedMessage);
+      if (typeof cb === "function") {
+        cb({ success: true, message: emittedMessage });
+      }
       await markRoomActivity(roomId);
     } catch (error) {
       console.warn("Socket send-message fallback failed:", error?.message || error);
+      if (typeof cb === "function") {
+        cb({ success: false, message: "Send failed" });
+      }
     }
   });
 

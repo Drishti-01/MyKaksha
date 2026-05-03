@@ -1,7 +1,6 @@
 ﻿import {
   createRoomRecord,
   createRoomSessionEntry,
-  findRoomByCode,
   findRoomById,
   getLeaderboard,
   getMyRoomStats,
@@ -124,6 +123,33 @@ export async function listRooms(req, res) {
     globalStudyingApprox: getGlobalStudyingApproxCount(),
     mostActiveToday: [...roomRows].sort((a, b) => (b.onlineCount || 0) - (a.onlineCount || 0)).slice(0, 3),
   });
+}
+
+export async function listMyRooms(req, res) {
+  const rooms = await listRoomsMerged();
+  const userId = req.auth.user.id;
+  const mine = rooms
+    .filter((room) => (
+      room.createdBy?.userId === userId ||
+      (room.members || []).some((member) => member.userId === userId)
+    ))
+    .sort((a, b) => {
+      const aTime = new Date(a.lastActiveAt || a.createdAt || 0).getTime();
+      const bTime = new Date(b.lastActiveAt || b.createdAt || 0).getTime();
+      return bTime - aTime;
+    })
+    .slice(0, 3)
+    .map((room) => ({
+      id: room.id,
+      name: room.name,
+      code: room.code,
+      type: room.type,
+      focusStyle: room.focusStyle,
+      lastActiveAt: room.lastActiveAt || room.createdAt,
+      onlineCount: getVisibleOnlineCountForRoom(room.id),
+    }));
+
+  ok(res, { rooms: mine });
 }
 
 export async function createRoom(req, res) {
