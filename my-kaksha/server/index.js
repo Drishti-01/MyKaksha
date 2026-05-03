@@ -150,15 +150,19 @@ io.on("connection", (socket) => {
       const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : "";
       if (!roomId) return;
 
-      if (socket.data.joinedRoomId === roomId) {
-        return;
-      }
-
       const userId = socket.userId || socket.id;
       const username = socket.userName || "Student";
       const privacy = payload.privacy && typeof payload.privacy === "object" ? payload.privacy : {};
 
-      console.log(`[socket] join-room: userId=${userId} roomId=${roomId}`);
+      console.log(`[socket] join-room: userId=${userId} roomId=${roomId} (prev joinedRoomId=${socket.data.joinedRoomId})`);
+
+      // Allow re-join if socket reconnected (joinedRoomId may be stale from previous connection)
+      // Only skip if this exact socket already joined this exact room in this session
+      if (socket.data.joinedRoomId === roomId) {
+        console.log(`[socket] join-room: already joined, skipping duplicate for userId=${userId}`);
+        socket.emit("room-joined", { roomId, userId, success: true });
+        return;
+      }
 
       const prevRoom = socket.data.roomId;
       if (prevRoom && prevRoom !== roomId) {
@@ -190,20 +194,19 @@ io.on("connection", (socket) => {
       });
 
       // Add user to Room.members in MongoDB
-      // Use $ne check on userId + $push to avoid duplicates by userId field
-      // $addToSet on subdocuments does full-object equality, not field equality
+      // Filter: only update if this userId is NOT already in members array
+      // $push adds the member subdocument — avoids full-object equality issue of $addToSet
       try {
-        await Room.updateOne(
+        const updateResult = await Room.updateOne(
           { _id: roomId, "members.userId": { $ne: userId } },
           {
             $push: { members: { userId, name: username, joinedAt: new Date() } },
             $set: { lastActiveAt: new Date(), isActive: true },
           }
         );
-        console.log(`[socket] join-room: upserted userId=${userId} in members of roomId=${roomId}`);
+        console.log(`[socket] join-room: Room.updateOne result — matched=${updateResult.matchedCount} modified=${updateResult.modifiedCount} userId=${userId} roomId=${roomId}`);
       } catch (memberErr) {
-        // Non-fatal — presence registry still tracks them in-memory
-        console.warn("[socket] join-room: failed to update Room.members:", memberErr?.message);
+        console.error("[socket] join-room: Room.updateOne FAILED:", memberErr?.message, memberErr);
       }
 
       await createRoomSessionEntry({ roomId, userId, userName: username });
@@ -466,7 +469,6 @@ io.on("connection", (socket) => {
   });
 
   // Explicit leave-room event — called when user clicks "Leave Room" button
-  // Cleans up presence, broadcasts departure, updates lobby count
   socket.on("leave-room", async ({ roomId } = {}) => {
     const targetRoom = typeof roomId === "string" ? roomId.trim() : socket.data.roomId;
     if (!targetRoom) return;
@@ -479,11 +481,9 @@ io.on("connection", (socket) => {
     socket.data.roomId = null;
     socket.data.joinedRoomId = null;
 
-    // Remove from in-memory presence registry
-    const { removeRoomMember } = await import("./services/studyPresenceRegistry.js");
-    removeRoomMember(targetRoom, socket.id);
+    // Remove from in-memory presence registry using already-imported function
+    removeSocketEverywhere(socket.id);
 
-    // Notify remaining room members
     io.to(targetRoom).emit("user-left-room", {
       roomId: targetRoom,
       userId,
