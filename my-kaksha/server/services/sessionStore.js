@@ -51,7 +51,7 @@ export async function touchSession(sessionId) {
   const session = await Session.findByIdAndUpdate(
     sessionId,
     { lastSeenAt: new Date() },
-    { new: true }
+    { returnDocument: "after" }
   ).lean();
 
   if (!session) {

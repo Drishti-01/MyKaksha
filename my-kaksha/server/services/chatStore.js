@@ -14,8 +14,10 @@ function normalizeSender({ userId, name, username }) {
 
 function toClientMessage(doc) {
   const senderName = doc?.sender?.name || "Guest";
+  const stableId = doc._id || doc.id;
   return {
-    id: doc._id || doc.id,
+    id: stableId,
+    _id: stableId,
     sender: {
       userId: doc?.sender?.userId || "guest",
       name: senderName,

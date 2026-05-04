@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { login, logout, me, signup } from "../controllers/authController.js";
+import { login, logout, me, signup, resetStats } from "../controllers/authController.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { validateLogin, validateSignup } from "../middleware/validation.js";
 
@@ -10,5 +10,6 @@ router.post("/signup", validateSignup, asyncHandler(signup));
 router.post("/login", validateLogin, asyncHandler(login));
 router.get("/me", requireAuth, asyncHandler(me));
 router.post("/logout", requireAuth, asyncHandler(logout));
+router.post("/reset-stats", requireAuth, asyncHandler(resetStats));
 
 export default router;

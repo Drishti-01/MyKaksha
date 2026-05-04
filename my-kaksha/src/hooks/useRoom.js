@@ -1,44 +1,78 @@
 ﻿import { useCallback, useEffect, useState } from "react";
-import { fetchRoomDetail, leaveRoomApi, fetchRoomStatsApi, fetchMyRoomStatsApi } from "../api/rooms";
+import { fetchRoomDetail, leaveRoomApi, fetchRoomStatsApi, fetchMyRoomStatsApi, fetchMyRoomsApi } from "../api/rooms";
 
-const MY_ROOMS_KEY = "myKakshaMyRooms";
-const MY_ROOMS_META_KEY = "myKakshaMyRoomsMeta";
+const myRoomsCache = {
+  ids: [],
+  meta: {},
+  loadedAt: 0,
+};
+
+// Attempt to hydrate cache from localStorage for instant UI
+// Cache key v2 — bumped to invalidate old seed-dsa string IDs
+const CACHE_KEY = "myRooms_cache_v2";
+try {
+  // Clear old v1 cache that may contain stale seed-dsa IDs
+  localStorage.removeItem("myRooms_cache_v1");
+  const raw = localStorage.getItem(CACHE_KEY);
+  if (raw) {
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.rooms)) {
+      myRoomsCache.ids = parsed.rooms.map((r) => r.id).slice(0, 3);
+      myRoomsCache.meta = parsed.rooms.reduce((acc, room) => {
+        acc[room.id] = { roomName: room.name, lastActiveAt: room.lastActiveAt };
+        return acc;
+      }, {});
+      myRoomsCache.loadedAt = parsed.loadedAt || Date.now();
+    }
+  }
+} catch (e) {
+  // ignore storage errors
+}
 
 export function readMyRooms() {
-  try {
-    const raw = localStorage.getItem(MY_ROOMS_KEY);
-    const list = raw ? JSON.parse(raw) : [];
-    return Array.isArray(list) ? list.slice(0, 3) : [];
-  } catch {
-    return [];
-  }
+  return myRoomsCache.ids.slice(0, 3);
 }
 
 export function readMyRoomMeta() {
+  return { ...myRoomsCache.meta };
+}
+
+export async function syncMyRooms() {
+  const data = await fetchMyRoomsApi();
+  const rooms = Array.isArray(data.rooms) ? data.rooms : [];
+  myRoomsCache.ids = rooms.map((room) => room.id).slice(0, 3);
+  myRoomsCache.meta = rooms.reduce((acc, room) => {
+    acc[room.id] = {
+      roomName: room.name,
+      lastActiveAt: room.lastActiveAt,
+    };
+    return acc;
+  }, {});
+  myRoomsCache.loadedAt = Date.now();
   try {
-    const raw = localStorage.getItem(MY_ROOMS_META_KEY);
-    const map = raw ? JSON.parse(raw) : {};
-    return map && typeof map === "object" ? map : {};
-  } catch {
-    return {};
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ rooms, loadedAt: myRoomsCache.loadedAt }));
+  } catch (e) {
+    // ignore storage errors
   }
+  return rooms;
 }
 
 export function rememberRoom(roomId, roomName) {
   if (!roomId) return;
-  try {
-    const prev = readMyRooms().filter((id) => id !== roomId);
-    const next = [roomId, ...prev].slice(0, 3);
-    localStorage.setItem(MY_ROOMS_KEY, JSON.stringify(next));
-
-    const meta = readMyRoomMeta();
-    meta[roomId] = {
-      roomName: roomName || meta[roomId]?.roomName || "Room",
+  const prev = readMyRooms().filter((id) => id !== roomId);
+  myRoomsCache.ids = [roomId, ...prev].slice(0, 3);
+  myRoomsCache.meta = {
+    ...myRoomsCache.meta,
+    [roomId]: {
+      roomName: roomName || myRoomsCache.meta?.[roomId]?.roomName || "Room",
       lastActiveAt: new Date().toISOString(),
-    };
-    localStorage.setItem(MY_ROOMS_META_KEY, JSON.stringify(meta));
-  } catch {
-    /* ignore */
+    },
+  };
+  try {
+    const rooms = myRoomsCache.ids.map((id) => ({ id, name: myRoomsCache.meta?.[id]?.roomName || "Room", lastActiveAt: myRoomsCache.meta?.[id]?.lastActiveAt }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ rooms, loadedAt: myRoomsCache.loadedAt || Date.now() }));
+  } catch (e) {
+    // ignore storage errors
   }
 }
 

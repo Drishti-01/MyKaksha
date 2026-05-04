@@ -10,12 +10,28 @@ const NOTES_OVERLAY_FILE = resolveDataFile("room-notes-overlay.json");
 const ROOM_SESSIONS_FILE = resolveDataFile("room-sessions.json");
 const USER_ROOM_STATS_FILE = resolveDataFile("user-room-stats.json");
 
+// Stable UUIDs for the 5 seed rooms — fixed so they never change between restarts
+// These are the real MongoDB _id values stored in the rooms collection
+export const SEED_ROOM_IDS = {
+  dsa:    "a1b2c3d4-0001-0001-0001-000000000001",
+  dbms:   "a1b2c3d4-0001-0001-0001-000000000002",
+  os:     "a1b2c3d4-0001-0001-0001-000000000003",
+  web:    "a1b2c3d4-0001-0001-0001-000000000004",
+  silent: "a1b2c3d4-0001-0001-0001-000000000005",
+};
+
+export const SEED_ROOMS_SPEC = [
+  { id: SEED_ROOM_IDS.dsa,    name: "DSA Practice", type: "public", focusStyle: "discussion", code: "DSPRC1" },
+  { id: SEED_ROOM_IDS.dbms,   name: "DBMS Prep",    type: "public", focusStyle: "discussion", code: "DBMS01" },
+  { id: SEED_ROOM_IDS.os,     name: "OS Revision",  type: "public", focusStyle: "discussion", code: "OSREV1" },
+  { id: SEED_ROOM_IDS.web,    name: "Web Dev Zone",  type: "public", focusStyle: "discussion", code: "WEBDVZ" },
+  { id: SEED_ROOM_IDS.silent, name: "Silent Focus",  type: "public", focusStyle: "silent",     code: "SILENT" },
+];
+
 let mongoReadyPromise = null;
 
 async function isMongoUsable() {
-  if (!process.env.MONGODB_URI) {
-    return false;
-  }
+  if (!process.env.MONGODB_URI) return false;
   if (!mongoReadyPromise) {
     mongoReadyPromise = ensureDatabaseConnection()
       .then(() => true)
@@ -73,25 +89,6 @@ function generateCode() {
   return out;
 }
 
-export const SEED_ROOMS = [
-  { id: "seed-dsa", name: "DSA Practice", type: "public", focusStyle: "discussion", code: "DSPRC1" },
-  { id: "seed-dbms", name: "DBMS Prep", type: "public", focusStyle: "discussion", code: "DBMS01" },
-  { id: "seed-os", name: "OS Revision", type: "public", focusStyle: "discussion", code: "OSREV1" },
-  { id: "seed-web", name: "Web Dev Zone", type: "public", focusStyle: "discussion", code: "WEBDVZ" },
-  { id: "seed-silent", name: "Silent Focus", type: "public", focusStyle: "silent", code: "SILENT" },
-].map((r) => ({
-  ...r,
-  createdBy: { userId: "system", name: "My Kaksha" },
-  members: [],
-  weeklyGoalHours: null,
-  sharedNotes: "",
-  activityScore: 0,
-  focusPoints: {},
-  isActive: true,
-  createdAt: nowIso(),
-  lastActiveAt: nowIso(),
-}));
-
 function toPlainRoom(doc) {
   const fp = doc.focusPoints instanceof Map ? Object.fromEntries(doc.focusPoints) : doc.focusPoints || {};
   const members = Array.isArray(doc.members) ? doc.members.map((m) => ({
@@ -105,7 +102,7 @@ function toPlainRoom(doc) {
     : { userId: doc.createdBy || "", name: doc.creatorName || "" };
 
   return {
-    id: doc._id || doc.id,
+    id: String(doc._id || doc.id),
     name: doc.name,
     type: doc.type,
     focusStyle: doc.focusStyle,
@@ -120,6 +117,40 @@ function toPlainRoom(doc) {
     createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : nowIso(),
     lastActiveAt: doc.lastActiveAt ? new Date(doc.lastActiveAt).toISOString() : nowIso(),
   };
+}
+
+// Seed the 5 default rooms into MongoDB using stable UUIDs as _id
+// Uses upsert by CODE so it always runs regardless of collection state
+// This means CASA and other user rooms are never affected
+export async function seedDefaultRooms() {
+  const mongo = await isMongoUsable();
+  if (!mongo) return;
+  for (const spec of SEED_ROOMS_SPEC) {
+    // Upsert by code — if room with this code exists, do nothing ($setOnInsert only runs on insert)
+    // If it doesn't exist, create it with the stable UUID _id
+    await Room.findOneAndUpdate(
+      { code: spec.code },
+      {
+        $setOnInsert: {
+          _id: spec.id,
+          name: spec.name,
+          type: spec.type,
+          focusStyle: spec.focusStyle,
+          code: spec.code,
+          createdBy: { userId: "system", name: "My Kaksha" },
+          members: [],
+          weeklyGoalHours: null,
+          sharedNotes: "",
+          activityScore: 0,
+          focusPoints: new Map(),
+          isActive: true,
+          lastActiveAt: new Date(),
+        },
+      },
+      { upsert: true, returnDocument: "after" }
+    );
+  }
+  console.log("[roomStore] Default rooms seeded/verified in MongoDB");
 }
 
 async function readFileStore() {
@@ -155,44 +186,55 @@ async function writeUserRoomStatsFallback(payload) {
   await writeJsonFile(USER_ROOM_STATS_FILE, payload);
 }
 
-function mergeRooms(dynamicRooms) {
-  const seedIds = new Set(SEED_ROOMS.map((r) => r.id));
-  const seedCodes = new Set(SEED_ROOMS.map((r) => r.code));
-  const extra = dynamicRooms.filter((r) => !seedIds.has(r.id) && !seedCodes.has(r.code));
-  return [...SEED_ROOMS.map((s) => ({ ...s, members: [...s.members] })), ...extra];
-}
-
+// MongoDB verified — Room.find() reads all rooms from MongoDB
+// No in-memory seed injection — everything comes from MongoDB
 export async function listRoomsMerged() {
   const mongo = await isMongoUsable();
   if (mongo) {
     const docs = await Room.find({}).lean();
-    return mergeRooms(docs.map(toPlainRoom));
+    return docs.map(toPlainRoom);
   }
+  // Fallback: JSON file + in-memory seeds when MongoDB is unavailable
   const { rooms } = await readFileStore();
-  return mergeRooms(rooms);
+  const seedIds = new Set(SEED_ROOMS_SPEC.map((r) => r.id));
+  const extra = rooms.filter((r) => !seedIds.has(r.id));
+  const fallbackSeeds = SEED_ROOMS_SPEC.map((s) => ({
+    ...s,
+    createdBy: { userId: "system", name: "My Kaksha" },
+    members: [],
+    weeklyGoalHours: null,
+    sharedNotes: "",
+    activityScore: 0,
+    focusPoints: {},
+    isActive: true,
+    createdAt: nowIso(),
+    lastActiveAt: nowIso(),
+  }));
+  return [...fallbackSeeds, ...extra];
 }
 
+// MongoDB verified — Room.findById() reads single room from MongoDB
 export async function findRoomById(roomId) {
-  const seedHit = SEED_ROOMS.find((r) => r.id === roomId);
-  if (seedHit) {
-    const overlay = await readNotesOverlay();
-    return { ...seedHit, sharedNotes: overlay[roomId] ?? seedHit.sharedNotes ?? "" };
-  }
-
   const mongo = await isMongoUsable();
   if (mongo) {
     const doc = await Room.findById(roomId).lean();
     if (doc) return toPlainRoom(doc);
+    return null;
   }
-
-  const merged = await listRoomsMerged();
-  return merged.find((r) => r.id === roomId) ?? null;
+  // Fallback when MongoDB unavailable
+  const all = await listRoomsMerged();
+  return all.find((r) => r.id === roomId) ?? null;
 }
 
 export async function findRoomByCode(code) {
   const normalized = normalizeCode(code);
-  const merged = await listRoomsMerged();
-  return merged.find((r) => r.code === normalized) ?? null;
+  const mongo = await isMongoUsable();
+  if (mongo) {
+    const doc = await Room.findOne({ code: normalized }).lean();
+    return doc ? toPlainRoom(doc) : null;
+  }
+  const all = await listRoomsMerged();
+  return all.find((r) => r.code === normalized) ?? null;
 }
 
 async function ensureUniqueCode() {
@@ -218,9 +260,30 @@ export async function createRoomRecord({ userId, creatorName, payload }) {
     ? null
     : Number(payload.weeklyGoalHours);
   const code = await ensureUniqueCode();
+  const newId = randomUUID();
+
+  const mongo = await isMongoUsable();
+  if (mongo) {
+    const created = await Room.create({
+      _id: newId,
+      name,
+      type,
+      focusStyle,
+      code,
+      createdBy: { userId, name: String(creatorName || "Student").trim() || "Student" },
+      members: [buildMember(userId, creatorName || "Student", new Date())],
+      weeklyGoalHours: Number.isFinite(weeklyGoalHours) ? weeklyGoalHours : null,
+      sharedNotes: "",
+      activityScore: 1,
+      focusPoints: new Map([[userId, 0]]),
+      isActive: true,
+      lastActiveAt: new Date(),
+    });
+    return toPlainRoom(created.toObject());
+  }
 
   const newRoom = {
-    id: randomUUID(),
+    id: newId,
     name,
     type,
     focusStyle,
@@ -235,27 +298,6 @@ export async function createRoomRecord({ userId, creatorName, payload }) {
     createdAt: nowIso(),
     lastActiveAt: nowIso(),
   };
-
-  const mongo = await isMongoUsable();
-  if (mongo) {
-    const created = await Room.create({
-      _id: newRoom.id,
-      name: newRoom.name,
-      type: newRoom.type,
-      focusStyle: newRoom.focusStyle,
-      code: newRoom.code,
-      createdBy: newRoom.createdBy,
-      members: newRoom.members,
-      weeklyGoalHours: newRoom.weeklyGoalHours,
-      sharedNotes: newRoom.sharedNotes,
-      activityScore: newRoom.activityScore,
-      focusPoints: new Map([[userId, 0]]),
-      isActive: true,
-      lastActiveAt: new Date(),
-    });
-    return toPlainRoom(created.toObject());
-  }
-
   const { rooms } = await readFileStore();
   rooms.push(newRoom);
   await writeFileStore({ rooms });
@@ -268,10 +310,6 @@ export async function joinRoomByCodeForUser(userId, userName, code) {
     const err = new Error("Room not found");
     err.status = 404;
     throw err;
-  }
-
-  if (room.id.startsWith("seed-")) {
-    return room;
   }
 
   const member = buildMember(userId, userName || "Student", new Date());
@@ -290,26 +328,18 @@ export async function joinRoomByCodeForUser(userId, userName, code) {
   if (idx === -1) return room;
   const exists = (rooms[idx].members || []).some((m) => m.userId === userId);
   const members = exists ? rooms[idx].members : [...(rooms[idx].members || []), member];
-  rooms[idx] = {
-    ...rooms[idx],
-    members,
-    activityScore: (rooms[idx].activityScore || 0) + 1,
-    lastActiveAt: nowIso(),
-    isActive: true,
-  };
+  rooms[idx] = { ...rooms[idx], members, activityScore: (rooms[idx].activityScore || 0) + 1, lastActiveAt: nowIso(), isActive: true };
   await writeFileStore({ rooms });
   return rooms[idx];
 }
 
 export async function leaveRoomForUser(userId, roomId) {
-  if (roomId.startsWith("seed-")) return findRoomById(roomId);
-
   const mongo = await isMongoUsable();
   if (mongo) {
     const updated = await Room.findByIdAndUpdate(
       roomId,
       { $pull: { members: { userId } }, $set: { lastActiveAt: new Date() } },
-      { new: true }
+      { returnDocument: "after" }
     ).lean();
     return updated ? toPlainRoom(updated) : null;
   }
@@ -317,27 +347,20 @@ export async function leaveRoomForUser(userId, roomId) {
   const { rooms } = await readFileStore();
   const idx = rooms.findIndex((r) => r.id === roomId);
   if (idx === -1) return null;
-  rooms[idx] = {
-    ...rooms[idx],
-    members: (rooms[idx].members || []).filter((m) => m.userId !== userId),
-    lastActiveAt: nowIso(),
-  };
+  rooms[idx] = { ...rooms[idx], members: (rooms[idx].members || []).filter((m) => m.userId !== userId), lastActiveAt: nowIso() };
   await writeFileStore({ rooms });
   return rooms[idx];
 }
 
 export async function saveRoomSharedNotes(roomId, content) {
   const text = String(content ?? "");
-  if (roomId.startsWith("seed-")) {
-    const overlay = await readNotesOverlay();
-    overlay[roomId] = text;
-    await writeNotesOverlay(overlay);
-    return findRoomById(roomId);
-  }
-
   const mongo = await isMongoUsable();
   if (mongo) {
-    const updated = await Room.findByIdAndUpdate(roomId, { sharedNotes: text, lastActiveAt: new Date() }, { new: true }).lean();
+    const updated = await Room.findByIdAndUpdate(
+      roomId,
+      { sharedNotes: text, lastActiveAt: new Date() },
+      { returnDocument: "after" }
+    ).lean();
     if (!updated) {
       const err = new Error("Room not found");
       err.status = 404;
@@ -346,16 +369,12 @@ export async function saveRoomSharedNotes(roomId, content) {
     return toPlainRoom(updated);
   }
 
-  const { rooms } = await readFileStore();
-  const idx = rooms.findIndex((r) => r.id === roomId);
-  if (idx === -1) {
-    const err = new Error("Room not found");
-    err.status = 404;
-    throw err;
-  }
-  rooms[idx] = { ...rooms[idx], sharedNotes: text, lastActiveAt: nowIso() };
-  await writeFileStore({ rooms });
-  return rooms[idx];
+  // Fallback: overlay file for when MongoDB is unavailable
+  const overlay = await readNotesOverlay();
+  overlay[roomId] = text;
+  await writeNotesOverlay(overlay);
+  const all = await listRoomsMerged();
+  return all.find((r) => r.id === roomId) ?? null;
 }
 
 export async function getRoomSharedNotes(roomId) {
@@ -368,29 +387,28 @@ export async function createRoomSessionEntry({ roomId, userId, userName }) {
   const date = todayKey(joinedAt);
   const mongo = await isMongoUsable();
   if (mongo) {
+    // On join: reset totalFocusMinutes to 0 for today's session
+    // Focus minutes are ONLY added by trackSessionComplete (Pomodoro completion)
+    // This prevents stale data from previous sessions showing wrong time
     return RoomSession.findOneAndUpdate(
       { roomId, userId, date },
       {
         $setOnInsert: {
           roomId,
           userId,
-          userName,
           date,
-          joinedAt,
-          leftAt: null,
-          totalFocusMinutes: 0,
           totalMinutes: 0,
           sessionsCompleted: 0,
-          lastActive: joinedAt,
         },
         $set: {
           userName,
           joinedAt,
           leftAt: null,
           lastActive: joinedAt,
+          totalFocusMinutes: 0,
         },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     ).lean();
   }
 
@@ -405,19 +423,7 @@ export async function createRoomSessionEntry({ roomId, userId, userName }) {
     await writeRoomSessionsFallback(data);
     return existing;
   }
-  const row = {
-    id: randomUUID(),
-    roomId,
-    userId,
-    userName,
-    date,
-    joinedAt: joinedAt.toISOString(),
-    leftAt: null,
-    totalFocusMinutes: 0,
-    totalMinutes: 0,
-    sessionsCompleted: 0,
-    lastActive: joinedAt.toISOString(),
-  };
+  const row = { id: randomUUID(), roomId, userId, userName, date, joinedAt: joinedAt.toISOString(), leftAt: null, totalFocusMinutes: 0, totalMinutes: 0, sessionsCompleted: 0, lastActive: joinedAt.toISOString() };
   data.sessions.push(row);
   await writeRoomSessionsFallback(data);
   return row;
@@ -431,19 +437,19 @@ export async function closeRoomSessionEntry({ roomId, userId, extraCompletedSess
     const session = await RoomSession.findOne({ roomId, userId, date, leftAt: null }).lean();
     if (!session) return null;
     const segmentMinutes = session.joinedAt ? minutesBetween(session.joinedAt, leftAt) : 0;
-    const updated = await RoomSession.findOneAndUpdate(
+    // Only update totalMinutes (raw time in room) — NOT totalFocusMinutes
+    // totalFocusMinutes is only updated by trackSessionComplete (Pomodoro completion)
+    return RoomSession.findOneAndUpdate(
       { roomId, userId, date },
       {
         $set: { leftAt, lastActive: leftAt },
         $inc: {
           totalMinutes: segmentMinutes,
-          totalFocusMinutes: segmentMinutes,
           sessionsCompleted: Math.max(0, Number(extraCompletedSessions) || 0),
         },
       },
-      { new: true }
+      { returnDocument: "after" }
     ).lean();
-    return updated;
   }
 
   const data = await readRoomSessionsFallback();
@@ -473,15 +479,10 @@ export async function upsertUserRoomStats({ roomId, userId, userName, deltaMinut
       { userId, roomId },
       {
         $setOnInsert: { userId, roomId },
-        $inc: {
-          totalFocusMinutes: safeMinutes,
-          sessionsCompleted: safeSessions,
-          weeklyMinutes: safeMinutes,
-          focusPoints: deltaPoints,
-        },
+        $inc: { totalFocusMinutes: safeMinutes, sessionsCompleted: safeSessions, weeklyMinutes: safeMinutes, focusPoints: deltaPoints },
         $set: { lastActive: new Date() },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     ).lean();
 
     await Room.findByIdAndUpdate(roomId, {
@@ -495,31 +496,11 @@ export async function upsertUserRoomStats({ roomId, userId, userName, deltaMinut
   data.stats = Array.isArray(data.stats) ? data.stats : [];
   const idx = data.stats.findIndex((s) => s.userId === userId && s.roomId === roomId);
   if (idx === -1) {
-    data.stats.push({
-      id: randomUUID(),
-      userId,
-      roomId,
-      userName: userName || "Student",
-      totalFocusMinutes: safeMinutes,
-      sessionsCompleted: safeSessions,
-      lastActive: nowIso(),
-      weeklyMinutes: safeMinutes,
-      focusPoints: deltaPoints,
-      streakDays: 0,
-    });
+    data.stats.push({ id: randomUUID(), userId, roomId, userName: userName || "Student", totalFocusMinutes: safeMinutes, sessionsCompleted: safeSessions, lastActive: nowIso(), weeklyMinutes: safeMinutes, focusPoints: deltaPoints, streakDays: 0 });
   } else {
     const prev = data.stats[idx];
-    data.stats[idx] = {
-      ...prev,
-      userName: userName || prev.userName,
-      totalFocusMinutes: (prev.totalFocusMinutes || 0) + safeMinutes,
-      sessionsCompleted: (prev.sessionsCompleted || 0) + safeSessions,
-      weeklyMinutes: (prev.weeklyMinutes || 0) + safeMinutes,
-      focusPoints: (prev.focusPoints || 0) + deltaPoints,
-      lastActive: nowIso(),
-    };
+    data.stats[idx] = { ...prev, userName: userName || prev.userName, totalFocusMinutes: (prev.totalFocusMinutes || 0) + safeMinutes, sessionsCompleted: (prev.sessionsCompleted || 0) + safeSessions, weeklyMinutes: (prev.weeklyMinutes || 0) + safeMinutes, focusPoints: (prev.focusPoints || 0) + deltaPoints, lastActive: nowIso() };
   }
-
   await writeUserRoomStatsFallback(data);
   return data.stats[idx === -1 ? data.stats.length - 1 : idx];
 }
@@ -527,12 +508,10 @@ export async function upsertUserRoomStats({ roomId, userId, userName, deltaMinut
 export async function getRoomStats(roomId) {
   const mongo = await isMongoUsable();
   if (mongo) {
-    const rows = await UserRoomStats.find({ roomId }).sort({ focusPoints: -1, totalFocusMinutes: -1 }).lean();
-    return rows;
+    return UserRoomStats.find({ roomId }).sort({ focusPoints: -1, totalFocusMinutes: -1 }).lean();
   }
   const data = await readUserRoomStatsFallback();
-  const rows = (Array.isArray(data.stats) ? data.stats : []).filter((s) => s.roomId === roomId);
-  return rows.sort((a, b) => (b.focusPoints || 0) - (a.focusPoints || 0));
+  return (Array.isArray(data.stats) ? data.stats : []).filter((s) => s.roomId === roomId).sort((a, b) => (b.focusPoints || 0) - (a.focusPoints || 0));
 }
 
 export async function getMyRoomStats(roomId, userId) {
@@ -561,17 +540,32 @@ export async function getWeeklyRoomSummary(roomId) {
   const mongo = await isMongoUsable();
   if (mongo) {
     const sessions = await RoomSession.find({ roomId, joinedAt: { $gte: start } }).lean();
+    // Use totalFocusMinutes (Pomodoro-tracked time) for trending instead of totalMinutes
+    const totalFocusMinutes = sessions.reduce((sum, s) => sum + (s.totalFocusMinutes || 0), 0);
     const totalMinutes = sessions.reduce((sum, s) => sum + (s.totalMinutes || 0), 0);
     const uniqueMembers = new Set(sessions.map((s) => s.userId)).size;
-    return { totalMinutes, memberCount: uniqueMembers, sessionsCount: sessions.length };
+    return { 
+      totalMinutes: totalFocusMinutes, // Return focus minutes as totalMinutes for trending
+      totalFocusMinutes,
+      totalRawMinutes: totalMinutes,
+      memberCount: uniqueMembers, 
+      sessionsCount: sessions.length 
+    };
   }
-
   const data = await readRoomSessionsFallback();
   const list = Array.isArray(data.sessions) ? data.sessions : [];
   const sessions = list.filter((s) => s.roomId === roomId && new Date(s.joinedAt) >= start);
+  // Use totalFocusMinutes for trending calculation
+  const totalFocusMinutes = sessions.reduce((sum, s) => sum + (s.totalFocusMinutes || 0), 0);
   const totalMinutes = sessions.reduce((sum, s) => sum + (s.totalMinutes || 0), 0);
   const uniqueMembers = new Set(sessions.map((s) => s.userId)).size;
-  return { totalMinutes, memberCount: uniqueMembers, sessionsCount: sessions.length };
+  return { 
+    totalMinutes: totalFocusMinutes, // Return focus minutes as totalMinutes for trending
+    totalFocusMinutes,
+    totalRawMinutes: totalMinutes,
+    memberCount: uniqueMembers, 
+    sessionsCount: sessions.length 
+  };
 }
 
 export async function getWeeklyUserSummary(userId) {
@@ -590,36 +584,54 @@ export async function getWeeklyUserSummary(userId) {
     let productiveDay = null;
     let max = 0;
     for (const [day, mins] of Object.entries(byDay)) {
-      if (mins > max) {
-        max = mins;
-        productiveDay = day;
-      }
+      if (mins > max) { max = mins; productiveDay = day; }
     }
-    return {
-      totalMinutes,
-      sessionsCompleted,
-      goalsWorkedOn: roomSet.size,
-      productiveDay,
-      comparisonPercent: 0,
-    };
+    return { totalMinutes, sessionsCompleted, goalsWorkedOn: roomSet.size, productiveDay, comparisonPercent: 0 };
   }
-
   const data = await readRoomSessionsFallback();
   const list = (Array.isArray(data.sessions) ? data.sessions : []).filter((s) => s.userId === userId && new Date(s.joinedAt) >= start);
   const totalMinutes = list.reduce((sum, s) => sum + (s.totalMinutes || 0), 0);
   const sessionsCompleted = list.reduce((sum, s) => sum + (s.sessionsCompleted || 0), 0);
   const roomSet = new Set(list.map((s) => s.roomId));
-  return {
-    totalMinutes,
-    sessionsCompleted,
-    goalsWorkedOn: roomSet.size,
-    productiveDay: null,
-    comparisonPercent: 0,
-  };
+  return { totalMinutes, sessionsCompleted, goalsWorkedOn: roomSet.size, productiveDay: null, comparisonPercent: 0 };
+}
+
+export async function getWeeklyRoomContribution(userId) {
+  const start = startOfWeek();
+  const rooms = await listRoomsMerged();
+  const roomNameById = new Map(rooms.map((room) => [room.id, room.name]));
+
+  const mongo = await isMongoUsable();
+  if (mongo) {
+    const sessions = await RoomSession.find({ userId, joinedAt: { $gte: start } }).lean();
+    const grouped = new Map();
+    for (const session of sessions) {
+      const key = String(session.roomId || "");
+      if (!key) continue;
+      const prev = grouped.get(key) || { roomId: key, totalMinutes: 0, sessionsCompleted: 0 };
+      prev.totalMinutes += Number(session.totalFocusMinutes ?? session.totalMinutes ?? 0);
+      prev.sessionsCompleted += Number(session.sessionsCompleted || 0);
+      grouped.set(key, prev);
+    }
+    return [...grouped.values()].map((row) => ({ ...row, roomName: roomNameById.get(row.roomId) || "Unknown room" })).sort((a, b) => (b.totalMinutes || 0) - (a.totalMinutes || 0));
+  }
+
+  const data = await readRoomSessionsFallback();
+  const sessions = (Array.isArray(data.sessions) ? data.sessions : []).filter((s) => s.userId === userId && new Date(s.joinedAt) >= start);
+  const grouped = new Map();
+  for (const session of sessions) {
+    const key = String(session.roomId || "");
+    if (!key) continue;
+    const prev = grouped.get(key) || { roomId: key, totalMinutes: 0, sessionsCompleted: 0 };
+    prev.totalMinutes += Number(session.totalFocusMinutes ?? session.totalMinutes ?? 0);
+    prev.sessionsCompleted += Number(session.sessionsCompleted || 0);
+    grouped.set(key, prev);
+  }
+  return [...grouped.values()].map((row) => ({ ...row, roomName: roomNameById.get(row.roomId) || "Unknown room" })).sort((a, b) => (b.totalMinutes || 0) - (a.totalMinutes || 0));
 }
 
 export async function markRoomActivity(roomId) {
-  if (!roomId || roomId.startsWith("seed-")) return;
+  if (!roomId) return;
   const mongo = await isMongoUsable();
   if (mongo) {
     await Room.findByIdAndUpdate(roomId, { $set: { lastActiveAt: new Date(), isActive: true }, $inc: { activityScore: 1 } });
@@ -628,11 +640,6 @@ export async function markRoomActivity(roomId) {
   const { rooms } = await readFileStore();
   const idx = rooms.findIndex((r) => r.id === roomId);
   if (idx === -1) return;
-  rooms[idx] = {
-    ...rooms[idx],
-    lastActiveAt: nowIso(),
-    isActive: true,
-    activityScore: (rooms[idx].activityScore || 0) + 1,
-  };
+  rooms[idx] = { ...rooms[idx], lastActiveAt: nowIso(), isActive: true, activityScore: (rooms[idx].activityScore || 0) + 1 };
   await writeFileStore({ rooms });
 }

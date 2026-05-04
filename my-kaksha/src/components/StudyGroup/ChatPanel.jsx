@@ -10,8 +10,11 @@ function formatTs(value) {
 
 function normalizeIncoming(msg) {
   const senderName = msg?.sender?.name || msg?.username || "Guest";
+  const stableId = msg?.id || msg?._id || "";
   return {
-    id: msg.id || `${Date.now()}-${Math.random()}`,
+    id: stableId || `${Date.now()}-${Math.random()}`,
+    serverId: stableId || "",
+    clientMessageId: typeof msg?.clientMessageId === "string" ? msg.clientMessageId : "",
     sender: { userId: msg?.sender?.userId || "guest", name: senderName },
     content: msg.content || msg.text || "",
     timestamp: msg.timestamp || new Date().toISOString(),
@@ -24,7 +27,12 @@ function normalizeIncoming(msg) {
 function dedupeMessages(rows) {
   const seen = new Set();
   return (rows || []).filter((row) => {
-    const key = String(row.id || row.timestamp || row.content || "");
+    const key = String(
+      row.serverId ||
+      row.id ||
+      row.clientMessageId ||
+      `${row.timestamp || ""}-${row.sender?.userId || ""}-${row.content || ""}`
+    );
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -34,14 +42,33 @@ function dedupeMessages(rows) {
 export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPaused, pausedMessage, isActiveTab, onUnreadChange }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
   const [typingName, setTypingName] = useState("");
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(true);
   const boxRef = useRef(null);
   const typingTimerRef = useRef(null);
+  const sendTimeoutRef = useRef(null);
 
   const newestTimestamp = useMemo(() => messages[messages.length - 1]?.timestamp, [messages]);
   const oldestTimestamp = useMemo(() => messages[0]?.timestamp, [messages]);
+
+  function upsertIncoming(prev, incoming) {
+    const msg = normalizeIncoming(incoming);
+    const byServer = msg.serverId || msg.id;
+    if (byServer && prev.some((existing) => (existing.serverId || existing.id) === byServer)) {
+      return prev;
+    }
+    if (msg.clientMessageId) {
+      const pendingIdx = prev.findIndex((existing) => existing.clientMessageId === msg.clientMessageId);
+      if (pendingIdx !== -1) {
+        const next = [...prev];
+        next[pendingIdx] = msg;
+        return dedupeMessages(next);
+      }
+    }
+    return dedupeMessages([...prev, msg]);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -65,10 +92,24 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
     const socket = socketRef?.current;
     if (!socket) return;
 
+    // Re-register listeners whenever socket instance changes
+    // socketRef is a ref so we read .current directly here
+
     const onReceive = (incoming) => {
       const msg = normalizeIncoming(incoming);
-      setMessages((prev) => (prev.some((existing) => existing.id === msg.id) ? prev : [...prev, msg]));
-      if (!isActiveTab && msg.sender.userId !== meUserId) {
+      // Always reset sending state when we get any message from ourselves
+      // Do this BEFORE dedup check so it always fires
+      if ((msg.sender?.userId || "") === String(meUserId)) {
+        setSending(false);
+        setText("");
+        // Clear the safety timeout
+        if (sendTimeoutRef.current) {
+          clearTimeout(sendTimeoutRef.current);
+          sendTimeoutRef.current = null;
+        }
+      }
+      setMessages((prev) => upsertIncoming(prev, msg));
+      if (!isActiveTab && (msg.sender?.userId || "") !== String(meUserId)) {
         onUnreadChange?.((v) => (v || 0) + 1);
       }
     };
@@ -106,6 +147,25 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
     socket.on("user-joined-room", onSystem);
     socket.on("user-left-room", onSystem);
 
+    // Listen for chat history sent by server on room join
+    const onChatHistory = (history) => {
+      if (!Array.isArray(history)) return;
+      const normalized = dedupeMessages(history.map(normalizeIncoming));
+      setMessages(normalized);
+      setHasOlder(normalized.length >= 50);
+    };
+    socket.on("chat-history", onChatHistory);
+
+    // Listen for message-error so sending state is never stuck
+    const onMessageError = () => {
+      setSending(false);
+      if (sendTimeoutRef.current) {
+        clearTimeout(sendTimeoutRef.current);
+        sendTimeoutRef.current = null;
+      }
+    };
+    socket.on("message-error", onMessageError);
+
     return () => {
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
       socket.off("receive-message", onReceive);
@@ -114,6 +174,8 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
       socket.off("typing-stop", onTypingStop);
       socket.off("user-joined-room", onSystem);
       socket.off("user-left-room", onSystem);
+      socket.off("chat-history", onChatHistory);
+      socket.off("message-error", onMessageError);
     };
   }, [socketRef, roomId, isActiveTab, meUserId, onUnreadChange]);
 
@@ -149,43 +211,41 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
     const value = String(rawText || "").trim();
     if (!value || chatPaused) return;
 
-    if (retryId) {
-      setMessages((prev) => prev.map((m) => (m.id === retryId ? { ...m, failed: false, pending: true } : m)));
-    }
+    const socket = socketRef?.current;
 
-    const optimistic = retryId
-      ? null
-      : normalizeIncoming({
-          id: `tmp-${Date.now()}-${Math.random()}`,
-          sender: { userId: meUserId, name: meName },
-          content: value,
-          timestamp: new Date().toISOString(),
-          type: "user",
-          pending: true,
+    // If socket not connected, fall back to REST
+    if (!socket || !socket.connected) {
+      console.log("[ChatPanel] socket not connected, using REST fallback");
+      try {
+        const data = await sendRoomMessageApi(roomId, value, "user");
+        const sent = normalizeIncoming(data.message);
+        setMessages((prev) => {
+          if (retryId) return dedupeMessages(prev.map((m) => (m.id === retryId ? sent : m)));
+          const exists = prev.find((m) => (m.serverId || m.id) === (sent.serverId || sent.id));
+          if (exists) return prev;
+          return dedupeMessages([...prev, sent]);
         });
-
-    if (optimistic) {
-      setMessages((prev) => [...prev, optimistic]);
-      setText("");
+      } catch (e) {
+        console.error("[ChatPanel] REST fallback failed:", e.message);
+      }
+      return;
     }
 
-    try {
-      const data = await sendRoomMessageApi(roomId, value, "user");
-      const sent = normalizeIncoming(data.message);
-      setMessages((prev) => {
-        if (retryId) {
-          return prev.map((m) => (m.id === retryId ? sent : m));
-        }
-        return prev.map((m) => (m.id === optimistic.id ? sent : m));
-      });
-    } catch {
-      setMessages((prev) => {
-        if (retryId) {
-          return prev.map((m) => (m.id === retryId ? { ...m, pending: false, failed: true } : m));
-        }
-        return prev.map((m) => (m.id === optimistic.id ? { ...m, pending: false, failed: true } : m));
-      });
-    }
+    // Send via socket — server will broadcast receive-message back to all including sender
+    setSending(true);
+    setText("");
+
+    // Safety timeout — if receive-message never arrives, unlock the button
+    const timeout = setTimeout(() => {
+      setSending(false);
+      console.warn("[ChatPanel] send timeout — no receive-message after 8s");
+    }, 8000);
+
+    // Store timeout so onReceive can clear it
+    sendTimeoutRef.current = timeout;
+
+    console.log(`[ChatPanel] emitting send-message roomId=${roomId} len=${value.length}`);
+    socket.emit("send-message", { roomId, content: value, type: "user" });
   }
 
   function handleSubmit(e) {
@@ -266,9 +326,9 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
           onKeyDown={onKeyDown}
           rows={2}
           placeholder={chatPaused ? "Chat paused during focus" : "Type message... Enter to send, Shift+Enter new line"}
-          disabled={chatPaused}
+          disabled={chatPaused || sending}
         />
-        <button type="submit" className="sg2-btn" disabled={chatPaused}>Send</button>
+        <button type="submit" className="sg2-btn" disabled={chatPaused || sending}>{sending ? "Sending..." : "Send"}</button>
       </form>
     </div>
   );

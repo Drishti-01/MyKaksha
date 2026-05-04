@@ -1,7 +1,6 @@
 ﻿import {
   createRoomRecord,
   createRoomSessionEntry,
-  findRoomByCode,
   findRoomById,
   getLeaderboard,
   getMyRoomStats,
@@ -17,6 +16,7 @@
   closeRoomSessionEntry,
 } from "../services/roomStore.js";
 import { createChatMessage, readRecentChatMessages } from "../services/chatStore.js";
+import Room from "../models/Room.js";
 import RoomSession from "../models/RoomSession.js";
 import { getGlobalStudyingApproxCount, getLobbySocketCount, getVisibleOnlineCountForRoom } from "../services/studyPresenceRegistry.js";
 
@@ -73,6 +73,7 @@ function toLobbyRoom(room) {
     focusStyle: room.focusStyle,
     code: room.code,
     memberCount: (room.members || []).length,
+    members: room.members || [],
     onlineCount,
     status: roomStatus(room, onlineCount),
     activityScore: room.activityScore ?? 0,
@@ -82,6 +83,22 @@ function toLobbyRoom(room) {
     createdAt: room.createdAt,
     lastActiveAt: room.lastActiveAt,
   };
+}
+
+// Cache for trending results to avoid N+1 queries
+const trendingCache = new Map();
+const TRENDING_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCachedTrending(key) {
+  const cached = trendingCache.get(key);
+  if (cached && Date.now() - cached.timestamp < TRENDING_CACHE_TTL) {
+    return cached.data;
+  }
+  return null;
+}
+
+function setCachedTrending(key, data) {
+  trendingCache.set(key, { data, timestamp: Date.now() });
 }
 
 export async function listRooms(req, res) {
@@ -94,19 +111,28 @@ export async function listRooms(req, res) {
 
   const roomRows = visible.map(toLobbyRoom);
 
-  const trendingRaw = await Promise.all(roomRows.map(async (room) => {
-    const summary = await getWeeklyRoomSummary(room.id);
-    return {
-      ...room,
-      weeklyMinutes: summary.totalMinutes,
-      weeklyHours: Math.round((summary.totalMinutes / 60) * 10) / 10,
-      weeklyMembers: summary.memberCount,
-    };
-  }));
+  // Check cache first for trending data
+  const cacheKey = `trending_${new Date().toISOString().slice(0, 10)}`;
+  let trending = getCachedTrending(cacheKey);
+  
+  if (!trending) {
+    const trendingRaw = await Promise.all(roomRows.map(async (room) => {
+      const summary = await getWeeklyRoomSummary(room.id);
+      return {
+        ...room,
+        weeklyMinutes: summary.totalMinutes,
+        weeklyHours: Math.round((summary.totalMinutes / 60) * 10) / 10,
+        weeklyMembers: summary.memberCount,
+      };
+    }));
 
-  const trending = trendingRaw
-    .sort((a, b) => (b.weeklyMinutes || 0) - (a.weeklyMinutes || 0))
-    .slice(0, 3);
+    trending = trendingRaw
+      .filter((room) => (room.weeklyMinutes || 0) > 0) // Only show rooms with actual activity
+      .sort((a, b) => (b.weeklyMinutes || 0) - (a.weeklyMinutes || 0))
+      .slice(0, 3);
+      
+    setCachedTrending(cacheKey, trending);
+  }
 
   const myRooms = roomRows
     .filter((r) => visible.find((x) => x.id === r.id)?.members?.some((m) => m.userId === req.auth.user.id))
@@ -124,6 +150,33 @@ export async function listRooms(req, res) {
     globalStudyingApprox: getGlobalStudyingApproxCount(),
     mostActiveToday: [...roomRows].sort((a, b) => (b.onlineCount || 0) - (a.onlineCount || 0)).slice(0, 3),
   });
+}
+
+export async function listMyRooms(req, res) {
+  const rooms = await listRoomsMerged();
+  const userId = req.auth.user.id;
+  const mine = rooms
+    .filter((room) => (
+      room.createdBy?.userId === userId ||
+      (room.members || []).some((member) => member.userId === userId)
+    ))
+    .sort((a, b) => {
+      const aTime = new Date(a.lastActiveAt || a.createdAt || 0).getTime();
+      const bTime = new Date(b.lastActiveAt || b.createdAt || 0).getTime();
+      return bTime - aTime;
+    })
+    .slice(0, 3)
+    .map((room) => ({
+      id: room.id,
+      name: room.name,
+      code: room.code,
+      type: room.type,
+      focusStyle: room.focusStyle,
+      lastActiveAt: room.lastActiveAt || room.createdAt,
+      onlineCount: getVisibleOnlineCountForRoom(room.id),
+    }));
+
+  ok(res, { rooms: mine });
 }
 
 export async function createRoom(req, res) {
@@ -175,7 +228,8 @@ export async function getRoomStudyTimes(req, res) {
     sessions: dedupeByUserId(sessions).map((session) => ({
       ...session,
       userId: String(session.userId),
-      totalFocusMinutes: Number(session.totalFocusMinutes ?? session.totalMinutes ?? 0),
+      // Only show Pomodoro-completed focus minutes — NOT raw time in room
+      totalFocusMinutes: Number(session.totalFocusMinutes || 0),
     })),
   });
 }
@@ -223,7 +277,42 @@ export async function joinRoomByCode(req, res) {
   if (!room) return fail(res, 404, "Room not found");
   await createRoomSessionEntry({ roomId: room.id, userId: req.auth.user.id, userName: req.auth.user.name });
   await markRoomActivity(room.id);
+  console.log(`[joinRoomByCode] userId=${req.auth.user.id} joined roomId=${room.id} via code=${code}`);
   ok(res, { room });
+}
+
+// Join by MongoDB _id (used when clicking Join on a room card in the lobby)
+// Uses $ne check on userId + $push to avoid duplicates by userId field
+// $addToSet on subdocuments does full-object equality, not field equality
+export async function joinRoomById(req, res) {
+  const roomId = req.params.id;
+  const userId = req.auth.user.id;
+  const userName = req.auth.user.name;
+
+  const room = await findRoomById(roomId);
+  if (!room) return fail(res, 404, "Room not found");
+
+  // Add to members only if not already present — check first, then push
+  const existing = await Room.findOne({ _id: roomId, "members.userId": userId }).lean();
+  if (!existing) {
+    await Room.findByIdAndUpdate(
+      roomId,
+      {
+        $push: { members: { userId, name: userName, joinedAt: new Date() } },
+        $set: { lastActiveAt: new Date(), isActive: true },
+      }
+    );
+    console.log(`[joinRoomById] member added userId=${userId} roomId=${roomId}`);
+  } else {
+    console.log(`[joinRoomById] userId=${userId} already a member of roomId=${roomId}`);
+  }
+
+  await createRoomSessionEntry({ roomId, userId, userName });
+  await markRoomActivity(roomId);
+
+  const updated = await findRoomById(roomId);
+  console.log(`[joinRoomById] userId=${userId} joined roomId=${roomId}`);
+  ok(res, { room: updated });
 }
 
 export async function leaveRoom(req, res) {
@@ -306,14 +395,12 @@ export async function trackSessionComplete(req, res) {
       $setOnInsert: {
         roomId,
         userId,
-        userName,
         date,
         joinedAt: new Date(),
         leftAt: null,
         totalFocusMinutes: 0,
         totalMinutes: 0,
         sessionsCompleted: 0,
-        lastActive: new Date(),
       },
       $inc: {
         totalFocusMinutes: deltaMinutes,
@@ -325,7 +412,7 @@ export async function trackSessionComplete(req, res) {
         lastActive: new Date(),
       },
     },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: "after" }
   ).lean();
 
   const stats = await upsertUserRoomStats({
@@ -349,14 +436,6 @@ export async function trackSessionComplete(req, res) {
     userId: String(userId),
     name: userName,
     sessionNumber: Number(session.sessionsCompleted || deltaSessions || 1),
-  });
-
-  req.app.get("io")?.to(roomId).emit("study-time-update", {
-    roomId,
-    userId: String(userId),
-    name: userName,
-    todayMinutes: Number(session.totalFocusMinutes || 0),
-    sessionsToday: Number(session.sessionsCompleted || 0),
   });
 
   const roomStats = await getRoomStats(roomId);

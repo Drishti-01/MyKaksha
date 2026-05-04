@@ -5,7 +5,10 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  min-height: 100vh;
+  height: 100vh;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
   position: sticky;
   top: 0;
 }
@@ -73,6 +76,13 @@
   color: #4a3728;
 }
 
+.mk-nav-btn:disabled,
+.mk-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .mk-nav-icon {
   width: 18px;
   height: 18px;
@@ -138,4 +148,12 @@
 
 .mk-sidebar.collapsed .mk-sidebar-header {
   justify-content: center;
+}
+
+/* Ensure grid main content areas never overflow their cell when sidebar collapses */
+.d-shell > .d-main,
+.a-shell > .a-main,
+.pt-shell > .pt-main {
+  min-width: 0;
+  overflow-x: hidden;
 }

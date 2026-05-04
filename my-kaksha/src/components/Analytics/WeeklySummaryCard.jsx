@@ -1,4 +1,4 @@
-export default function WeeklySummaryCard({ series, rows, totalSeconds, totalSessions }) {
+export default function WeeklySummaryCard({ series, rows, weeklySummary }) {
   if (!series || series.length === 0) {
     return (
       <div className="a-card" style={{ marginTop: 14, textAlign: "center" }}>
@@ -10,8 +10,12 @@ export default function WeeklySummaryCard({ series, rows, totalSeconds, totalSes
     );
   }
 
-  const weekTotal = series.reduce((sum, day) => sum + (day.focusSeconds || 0), 0);
-  const weekSessions = series.reduce((sum, day) => sum + (day.sessions || 0), 0);
+  const weekTotal = Number(weeklySummary?.totalMinutes)
+    ? Number(weeklySummary.totalMinutes) * 60
+    : series.reduce((sum, day) => sum + (day.focusSeconds || 0), 0);
+  const weekSessions = Number(weeklySummary?.sessionsCompleted)
+    ? Number(weeklySummary.sessionsCompleted)
+    : series.reduce((sum, day) => sum + (day.sessions || 0), 0);
   const weekTasks = series.reduce((sum, day) => sum + (day.tasksCompleted || 0), 0);
   const mostProductiveDay = [...series].sort((a, b) => (b.focusSeconds || 0) - (a.focusSeconds || 0))[0];
 

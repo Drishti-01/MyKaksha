@@ -6,6 +6,8 @@
 
 .sg2-shell {
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 280px 1fr;
   background: radial-gradient(circle at top right, #f3e8da 0%, #faf8f3 42%);
@@ -19,7 +21,9 @@
 
 .sg2-main {
   padding: 28px 32px 40px;
-  min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
+  min-width: 0;
 }
 
 .sg2-title {
@@ -56,8 +60,8 @@
 
 .sg2-room-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
 }
 
 .sg2-card {
@@ -87,7 +91,7 @@
 .sg2-actions {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .sg2-btn {
@@ -112,6 +116,20 @@
   cursor: not-allowed;
 }
 
+.sg2-btn:focus-visible {
+  outline: 2px solid #c2a189;
+  outline-offset: 2px;
+}
+
+.sg2-btn:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(194, 161, 137, 0.2);
+}
+
+.sg2-active-btn:focus-visible {
+  outline-color: #4a3728;
+}
+
 .sg2-input {
   display: block;
   width: 100%;
@@ -125,11 +143,12 @@
 }
 
 .sg2-trending {
-  margin-top: 28px;
-  padding: 20px;
-  border-radius: 16px;
+  margin-top: 32px;
+  padding: 24px;
+  border-radius: 20px;
   border: 1px solid #ead8c7;
   background: #fffdf9;
+  box-shadow: 0 4px 12px rgba(200, 182, 166, 0.1);
 }
 
 .sg2-room-page {
@@ -223,6 +242,15 @@
 .sg2-tab.active {
   background: #f5efe6;
   color: #4a3728;
+}
+
+.sg2-tab:focus-visible {
+  outline: 2px solid #c2a189;
+  outline-offset: -2px;
+}
+
+.sg2-tab:not(.active):hover {
+  background: #faf6f1;
 }
 
 .sg2-banner {
@@ -639,7 +667,6 @@
   0%, 80%, 100% { opacity: 0.3; }
   40% { opacity: 1; }
 }
-}
 
 .sg2-typing-dot {
   width: 6px;
@@ -937,6 +964,15 @@
   }
 }
 
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
 /* Unread Badge */
 .sg2-unread {
   display: inline-flex;
@@ -994,5 +1030,21 @@
 
   .sg2-chat-input .sg2-btn {
     width: 100%;
+  }
+  
+  /* Better touch targets for mobile */
+  .sg2-btn {
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+  
+  .sg2-tab {
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+  
+  .sg2-code-btn {
+    min-height: 44px;
+    padding: 12px 16px;
   }
 }

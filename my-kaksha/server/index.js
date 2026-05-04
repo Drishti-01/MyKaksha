@@ -1,7 +1,18 @@
-﻿import http from "node:http";
+﻿// Socket.io — Full Duplex Real-time Communication
+// HTTP is one-directional: client requests, server responds
+// WebSocket/Socket.io is bidirectional: both can initiate
+// Used here for: live chat, presence, timer sync, study updates
+// Each socket event is like an HTTP route but for real-time data
+// Concept 8 — Socket.io (Backend Engineering-I Eval-II)
+
+import http from "node:http";
 import { Server } from "socket.io";
 import "dotenv/config";
 import { createApp } from "./app.js";
+import { ensureDatabaseConnection } from "./config/database.js";
+import Room from "./models/Room.js";
+import Message from "./models/Message.js";
+import { seedDefaultRooms } from "./services/roomStore.js";
 import { createChatMessage, readRecentChatMessages } from "./services/chatStore.js";
 import { AUTH_COOKIE_NAME, verifyAuthToken } from "./utils/auth.js";
 import {
@@ -83,16 +94,19 @@ io.use(async (socket, next) => {
   try {
     const authToken = socket.handshake.auth?.token || readCookieValue(socket.request.headers.cookie, AUTH_COOKIE_NAME);
     if (!authToken) {
+      console.warn("[socket] Auth failed: no token");
       return next(new Error("Authentication required"));
     }
 
     const payload = verifyAuthToken(authToken);
     if (!payload?.sub || !payload.sessionId) {
+      console.warn("[socket] Auth failed: invalid token payload");
       return next(new Error("Invalid token"));
     }
 
     const session = await readSession(payload.sessionId);
     if (!session || session.userId !== payload.sub) {
+      console.warn("[socket] Auth failed: session not found or userId mismatch");
       return next(new Error("Authentication required"));
     }
 
@@ -101,8 +115,10 @@ io.use(async (socket, next) => {
     socket.userId = String(payload.sub);
     socket.userName = String(payload.name || "Student");
     socket.sessionId = String(payload.sessionId);
+    console.log(`[socket] Auth success: userId=${socket.userId} name=${socket.userName}`);
     next();
-  } catch (error) {
+  } catch (err) {
+    console.error("[socket] Auth error:", err?.message || err);
     next(new Error("Invalid token"));
   }
 });
@@ -134,13 +150,19 @@ io.on("connection", (socket) => {
       const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : "";
       if (!roomId) return;
 
-      if (socket.data.joinedRoomId === roomId) {
-        return;
-      }
-
       const userId = socket.userId || socket.id;
       const username = socket.userName || "Student";
       const privacy = payload.privacy && typeof payload.privacy === "object" ? payload.privacy : {};
+
+      console.log(`[socket] join-room: userId=${userId} roomId=${roomId} (prev joinedRoomId=${socket.data.joinedRoomId})`);
+
+      // Allow re-join if socket reconnected (joinedRoomId may be stale from previous connection)
+      // Only skip if this exact socket already joined this exact room in this session
+      if (socket.data.joinedRoomId === roomId) {
+        console.log(`[socket] join-room: already joined, skipping duplicate for userId=${userId}`);
+        socket.emit("room-joined", { roomId, userId, success: true });
+        return;
+      }
 
       const prevRoom = socket.data.roomId;
       if (prevRoom && prevRoom !== roomId) {
@@ -171,6 +193,29 @@ io.on("connection", (socket) => {
         appearInLeaderboard: privacy.appearInLeaderboard !== false,
       });
 
+  // Add user to Room.members in MongoDB
+  // Strategy: use findByIdAndUpdate with $push + $ne filter on the array element
+  // This is the most reliable approach across all MongoDB versions
+  try {
+    // First check if already a member to avoid duplicate push
+    const existing = await Room.findOne({ _id: roomId, "members.userId": userId }).lean();
+    if (!existing) {
+      const updateResult = await Room.findByIdAndUpdate(
+        roomId,
+        {
+          $push: { members: { userId, name: username, joinedAt: new Date() } },
+          $set: { lastActiveAt: new Date(), isActive: true },
+        },
+        { returnDocument: "after" }
+      );
+      console.log(`[socket] join-room: member added userId=${userId} roomId=${roomId} success=${!!updateResult}`);
+    } else {
+      console.log(`[socket] join-room: userId=${userId} already in members of roomId=${roomId}`);
+    }
+  } catch (memberErr) {
+    console.error("[socket] join-room: Room member update FAILED:", memberErr?.message, memberErr);
+  }
+
       await createRoomSessionEntry({ roomId, userId, userName: username });
       await markRoomActivity(roomId);
 
@@ -191,9 +236,9 @@ io.on("connection", (socket) => {
       const roomStats = await getRoomStats(roomId);
       io.to(roomId).emit("room-stats", { roomId, stats: roomStats });
 
-      console.log(`Socket: user joined room ${roomId}`, { userId, username });
+      console.log(`[socket] join-room: complete userId=${userId} roomId=${roomId}`);
     } catch (error) {
-      console.error("Socket join-room failed:", error);
+      console.error("[socket] join-room failed:", error);
       socket.emit("room-joined", { success: false, message: "Join failed" });
     }
   });
@@ -208,49 +253,16 @@ io.on("connection", (socket) => {
       const stats = await getRoomStats(roomId);
       if (typeof cb === "function") cb({ success: true, roomId, stats });
       socket.emit("room-stats", { roomId, stats });
-    } catch (error) {
+    } catch {
       if (typeof cb === "function") cb({ success: false, message: "stats unavailable" });
     }
   });
 
   socket.on("study-time-update", async (payload = {}) => {
-    try {
-      const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
-      if (!roomId) return;
-      const userId = socket.userId || socket.data.userId;
-      const userName = socket.userName || socket.data.username;
-      const todayMinutes = Math.max(0, Number(payload.todayMinutes) || 0);
-      const sessionsToday = Math.max(0, Number(payload.sessionsToday) || 0);
-
-      const stats = await upsertUserRoomStats({
-        roomId,
-        userId,
-        userName,
-        deltaMinutes: todayMinutes,
-        deltaSessions: sessionsToday,
-      });
-
-      io.to(roomId).emit("study-time-updated", {
-        roomId,
-        userId,
-        userName,
-        totalFocusMinutes: stats.totalFocusMinutes || 0,
-        sessionsCompleted: stats.sessionsCompleted || 0,
-      });
-
-      io.to(roomId).emit("study-time-update", {
-        roomId,
-        userId,
-        name: userName,
-        todayMinutes: stats.totalFocusMinutes || 0,
-        sessionsToday: stats.sessionsCompleted || 0,
-      });
-
-      const allStats = await getRoomStats(roomId);
-      io.to(roomId).emit("room-stats", { roomId, stats: allStats });
-    } catch (error) {
-      console.warn("Socket study-time-update failed:", error?.message || error);
-    }
+    // DEPRECATED: This event should not be used to update database stats
+    // Only session-complete should increment actual study time
+    // This event is kept for backward compatibility but does nothing
+    console.log("[socket] study-time-update: deprecated event ignored, use session-complete instead");
   });
 
   socket.on("session-complete", async (payload = {}) => {
@@ -306,11 +318,21 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("typing-stop", { userId: socket.data.userId });
   });
 
-  socket.on("send-message", async (payload = {}) => {
+  socket.on("send-message", async (payload = {}, cb) => {
     const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
-    if (!roomId) return;
-    const text = String(payload.text || "").trim();
-    if (!text) return;
+    if (!roomId) {
+      console.warn("[socket] send-message: no roomId");
+      return;
+    }
+    // BUG 2 FIX — frontend sends 'content', server was reading 'text' only
+    // Accept both field names so either works
+    const text = String(payload.content || payload.text || "").trim();
+    if (!text) {
+      console.warn("[socket] send-message: empty text, ignoring");
+      return;
+    }
+
+    console.log(`[socket] send-message: roomId=${roomId} userId=${socket.userId} len=${text.length}`);
 
     try {
       const message = await createChatMessage({
@@ -320,17 +342,43 @@ io.on("connection", (socket) => {
         text,
         type: payload.type === "system" ? "system" : "user",
       });
-      io.to(roomId).emit("receive-message", message);
+      const emittedMessage = {
+        ...message,
+        clientMessageId: typeof payload.clientMessageId === "string" ? payload.clientMessageId : undefined,
+      };
+      // Emit to ALL sockets in room including sender — io.to() not socket.to()
+      io.to(roomId).emit("receive-message", emittedMessage);
+      console.log(`[socket] send-message: broadcast to room ${roomId} msgId=${message.id || message._id}`);
+      if (typeof cb === "function") {
+        cb({ success: true, message: emittedMessage });
+      }
       await markRoomActivity(roomId);
     } catch (error) {
-      console.warn("Socket send-message fallback failed:", error?.message || error);
+      console.error("[socket] send-message failed:", error?.message || error);
+      // Notify sender so frontend can re-enable the send button
+      socket.emit("message-error", { error: "Failed to send message" });
+      if (typeof cb === "function") {
+        cb({ success: false, message: "Send failed" });
+      }
     }
   });
 
-  socket.on("notes-sync", (payload = {}) => {
+  socket.on("notes-sync", async (payload = {}) => {
     const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
     const content = typeof payload.content === "string" ? payload.content : "";
     if (!roomId) return;
+
+    // Persist shared notes to Room document in MongoDB
+    try {
+      await Room.findByIdAndUpdate(
+        roomId,
+        { sharedNotes: content, lastActiveAt: new Date() }
+      );
+    } catch (err) {
+      console.warn("[notes-sync] MongoDB save failed:", err?.message || err);
+    }
+
+    // Broadcast updated notes to all other clients in the room
     socket.to(roomId).emit("notes-sync", {
       roomId,
       content,
@@ -394,6 +442,34 @@ io.on("connection", (socket) => {
     cb({ members: dedupeMembersByUserId(getRoomMembersForClient(roomId, socket.id)) });
   });
 
+  // Explicit leave-room event — called when user clicks "Leave Room" button
+  socket.on("leave-room", async ({ roomId } = {}) => {
+    const targetRoom = typeof roomId === "string" ? roomId.trim() : socket.data.roomId;
+    if (!targetRoom) return;
+    const userId = socket.userId || socket.data.userId;
+    const username = socket.userName || socket.data.username;
+
+    console.log(`[socket] leave-room: userId=${userId} roomId=${targetRoom}`);
+
+    socket.leave(targetRoom);
+    socket.data.roomId = null;
+    socket.data.joinedRoomId = null;
+
+    // Remove from in-memory presence registry using already-imported function
+    removeSocketEverywhere(socket.id);
+
+    io.to(targetRoom).emit("user-left-room", {
+      roomId: targetRoom,
+      userId,
+      username,
+      text: `${username} left the room`,
+      timestamp: new Date().toISOString(),
+    });
+
+    broadcastPresence(targetRoom);
+    emitLobbyCount();
+  });
+
   socket.on("disconnect", async () => {
     const roomId = socket.data.roomId;
     const userId = socket.userId || socket.data.userId;
@@ -406,15 +482,9 @@ io.on("connection", (socket) => {
 
     try {
       const closed = await closeRoomSessionEntry({ roomId, userId });
-      if (closed && closed.totalMinutes > 0) {
-        await upsertUserRoomStats({
-          roomId,
-          userId,
-          userName: username,
-          deltaMinutes: closed.totalMinutes,
-          deltaSessions: closed.sessionsCompleted || 0,
-        });
-      }
+      // Do NOT add raw session time to focus stats on disconnect
+      // Focus minutes are only tracked via trackSessionComplete (Pomodoro completion)
+      // We just close the session record cleanly
 
       const starter = timerStarterByRoom.get(roomId);
       if (starter?.userId === userId) {
@@ -446,6 +516,13 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
+  // Connect to MongoDB on startup and seed default rooms
+  try {
+    await ensureDatabaseConnection();
+    await seedDefaultRooms();
+  } catch (err) {
+    console.error("[Startup] MongoDB connection failed:", err.message);
+  }
   console.log(`My Kaksha API + chat socket running on http://localhost:${PORT}`);
 });

@@ -155,20 +155,50 @@ export default function SignupPage() {
     confirmPassword: "",
   });
   const [state, setState] = useState({ loading: false, message: "", type: "" });
+  const [fieldErrors, setFieldErrors] = useState({});
 
   function handleChange(event) {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    // Clear field error when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+    }
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
-    if (form.password !== form.confirmPassword) {
-      setState({ loading: false, message: "Passwords do not match", type: "error" });
-      return;
+    setState({ loading: true, message: "", type: "" });
+    setFieldErrors({});
+
+    // Client-side validation
+    const errors = {};
+    if (!form.name.trim()) {
+      errors.name = "Name is required";
+    } else if (form.name.trim().length < 2) {
+      errors.name = "Name must be at least 2 characters";
+    }
+    if (!form.email.trim()) {
+      errors.email = "Email is required";
+    } else if (!/\S+@\S+\.\S+/.test(form.email)) {
+      errors.email = "Please enter a valid email address";
+    }
+    if (!form.password) {
+      errors.password = "Password is required";
+    } else if (form.password.length < 6) {
+      errors.password = "Password must be at least 6 characters";
+    }
+    if (!form.confirmPassword) {
+      errors.confirmPassword = "Please confirm your password";
+    } else if (form.password !== form.confirmPassword) {
+      errors.confirmPassword = "Passwords do not match";
     }
 
-    setState({ loading: true, message: "", type: "" });
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setState({ loading: false, message: "", type: "" });
+      return;
+    }
 
     try {
       await signupUser({
@@ -196,19 +226,88 @@ export default function SignupPage() {
           <form className="auth-form" onSubmit={handleSubmit}>
             <div className="auth-field">
               <label htmlFor="name">Name</label>
-              <input id="name" name="name" value={form.name} onChange={handleChange} placeholder="Aanya Sharma" required />
+              <input 
+                id="name" 
+                name="name" 
+                value={form.name} 
+                onChange={handleChange} 
+                placeholder="Aanya Sharma" 
+                required 
+                disabled={state.loading}
+                maxLength={50}
+                style={fieldErrors.name ? { borderColor: '#dc2626', background: '#fef2f2' } : {}}
+                aria-invalid={!!fieldErrors.name}
+                aria-describedby={fieldErrors.name ? "name-error" : undefined}
+              />
+              {fieldErrors.name && (
+                <span id="name-error" style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '4px' }} role="alert">
+                  {fieldErrors.name}
+                </span>
+              )}
             </div>
             <div className="auth-field">
               <label htmlFor="email">Email</label>
-              <input id="email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="you@example.com" required />
+              <input 
+                id="email" 
+                name="email" 
+                type="email" 
+                value={form.email} 
+                onChange={handleChange} 
+                placeholder="you@example.com" 
+                required 
+                disabled={state.loading}
+                style={fieldErrors.email ? { borderColor: '#dc2626', background: '#fef2f2' } : {}}
+                aria-invalid={!!fieldErrors.email}
+                aria-describedby={fieldErrors.email ? "email-error" : undefined}
+              />
+              {fieldErrors.email && (
+                <span id="email-error" style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '4px' }} role="alert">
+                  {fieldErrors.email}
+                </span>
+              )}
             </div>
             <div className="auth-field">
               <label htmlFor="password">Password</label>
-              <input id="password" name="password" type="password" value={form.password} onChange={handleChange} placeholder="••••••••" required />
+              <input 
+                id="password" 
+                name="password" 
+                type="password" 
+                value={form.password} 
+                onChange={handleChange} 
+                placeholder="••••••••" 
+                required 
+                disabled={state.loading}
+                minLength={6}
+                style={fieldErrors.password ? { borderColor: '#dc2626', background: '#fef2f2' } : {}}
+                aria-invalid={!!fieldErrors.password}
+                aria-describedby={fieldErrors.password ? "password-error" : undefined}
+              />
+              {fieldErrors.password && (
+                <span id="password-error" style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '4px' }} role="alert">
+                  {fieldErrors.password}
+                </span>
+              )}
             </div>
             <div className="auth-field">
               <label htmlFor="confirmPassword">Confirm Password</label>
-              <input id="confirmPassword" name="confirmPassword" type="password" value={form.confirmPassword} onChange={handleChange} placeholder="••••••••" required />
+              <input 
+                id="confirmPassword" 
+                name="confirmPassword" 
+                type="password" 
+                value={form.confirmPassword} 
+                onChange={handleChange} 
+                placeholder="••••••••" 
+                required 
+                disabled={state.loading}
+                style={fieldErrors.confirmPassword ? { borderColor: '#dc2626', background: '#fef2f2' } : {}}
+                aria-invalid={!!fieldErrors.confirmPassword}
+                aria-describedby={fieldErrors.confirmPassword ? "confirm-password-error" : undefined}
+              />
+              {fieldErrors.confirmPassword && (
+                <span id="confirm-password-error" style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '4px' }} role="alert">
+                  {fieldErrors.confirmPassword}
+                </span>
+              )}
             </div>
 
             {state.message ? (
@@ -217,7 +316,12 @@ export default function SignupPage() {
               </div>
             ) : null}
 
-            <button type="submit" className="auth-btn" disabled={state.loading}>
+            <button 
+              type="submit" 
+              className="auth-btn" 
+              disabled={state.loading || !form.name.trim() || !form.email.trim() || !form.password || !form.confirmPassword}
+              aria-label={state.loading ? "Creating account..." : "Create your study account"}
+            >
               {state.loading ? "Creating..." : "Create Account"}
             </button>
           </form>

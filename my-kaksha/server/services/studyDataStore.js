@@ -39,7 +39,7 @@ export async function writeStudyDataForUser(userId, payload) {
       ...normalized,
       updatedAt: new Date(),
     },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: "after" }
   ).lean();
 
   return normalizeStudyData(updated);

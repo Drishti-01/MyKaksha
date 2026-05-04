@@ -62,6 +62,7 @@ export default function RoomView() {
   const { user } = useAuth();
   const socketRef = useRef(null);
   const joinSentRef = useRef(false);
+  const [socketKey, setSocketKey] = useState(0); // increments on each new socket connection
   const [members, setMembers] = useState([]);
   const [studyTimes, setStudyTimes] = useState([]);
   const [weeklyLeaderboard, setWeeklyLeaderboard] = useState([]);
@@ -142,11 +143,9 @@ export default function RoomView() {
       transports: ["websocket", "polling"],
       reconnection: true,
       withCredentials: true,
-      auth: { token: localStorage.getItem("token") || "" },
     });
     socketRef.current = socket;
     joinSentRef.current = false;
-
     const loadStudyTimes = async () => {
       try {
         const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/study-times`, { credentials: "include" });
@@ -156,7 +155,8 @@ export default function RoomView() {
         const unique = dedupeByUserId(rows).map((row) => ({
           ...row,
           userId: String(row.userId),
-          totalFocusMinutes: Number(row.totalFocusMinutes ?? row.totalMinutes ?? 0),
+          // Only show Pomodoro focus minutes — not raw join time
+          totalFocusMinutes: Number(row.totalFocusMinutes || 0),
         })).sort((a, b) => (b.totalFocusMinutes || 0) - (a.totalFocusMinutes || 0));
         setStudyTimes(unique);
       } catch {
@@ -197,7 +197,16 @@ export default function RoomView() {
 
     socket.on("connect", () => {
       setReconnecting(false);
+      setSocketKey((k) => k + 1); // force ChatPanel to re-register listeners
       emitJoin();
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("[socket] Connection error in RoomView:", err.message);
+      // If auth failed, redirect to login
+      if (err.message === "Authentication required" || err.message === "Invalid token") {
+        navigate("/login", { replace: true });
+      }
     });
 
     socket.on("disconnect", () => {
@@ -240,9 +249,11 @@ export default function RoomView() {
     return () => {
       joinSentRef.current = false;
       socket.disconnect();
-      leaveRoom().catch(() => {});
+      // DO NOT call leaveRoom() here — user is just closing tab, not leaving the room
+      // Members should persist in MongoDB until they explicitly click "Leave Room"
+      // The socket disconnect event on server will handle presence cleanup only
     };
-  }, [roomId, privacyPayload, leaveRoom, setRoomStatsRows, setMyStats, room?.name, userId, displayName]);
+  }, [roomId, privacyPayload, setRoomStatsRows, setMyStats, room?.name, userId, displayName]);
 
   useEffect(() => {
     if (tab === "chat") {
@@ -265,7 +276,12 @@ export default function RoomView() {
   const chatPaused = room?.focusStyle === "silent" && timer.phase === "focus" && timer.running;
 
   async function handleLeave() {
+    // Emit leave-room socket event so server cleans up presence immediately
+    socketRef.current?.emit("leave-room", { roomId });
+    // Call REST API to update MongoDB (remove from members, close session)
     await leaveRoom();
+    // Clear last joined room from localStorage
+    try { localStorage.removeItem("lastJoinedRoom"); } catch { /* ignore */ }
     navigate("/study-group");
   }
 
@@ -311,6 +327,15 @@ export default function RoomView() {
       <div className="sg2-topbar sg2-room-topbar">
         <div>
           <div className="sg2-inline-row" style={{ gap: 8 }}>
+            <button 
+              type="button" 
+              className="sg2-btn secondary" 
+              style={{ padding: "6px 12px", fontSize: "0.85rem", marginRight: 8 }}
+              onClick={() => navigate("/study-group")}
+              title="Back to lobby"
+            >
+              ← Back
+            </button>
             <span className="sg2-room-dot" style={{ background: accent }} />
             <h1 className="sg2-title" style={{ fontSize: "1.45rem" }}>{room.name}</h1>
           </div>
@@ -398,6 +423,7 @@ export default function RoomView() {
           <div className="sg2-right-body">
             {tab === "chat" ? (
               <ChatPanel
+                key={socketKey}
                 roomId={roomId}
                 socketRef={socketRef}
                 meUserId={userId}

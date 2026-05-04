@@ -19,20 +19,35 @@ const css = `
 
   .pt-shell {
     min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     display: grid;
     grid-template-columns: 280px 1fr;
     background: #FAF8F3;
   }
-  .pt-shell.collapsed { grid-template-columns: 94px 1fr; }
-  .pt-main { min-width: 0; }
-
-  .pt-page {
-    min-height: 100vh; padding: 32px 48px 80px;
-    background: #FAF8F3; font-family: 'Poppins', sans-serif;
-    position: relative; overflow-x: hidden;
+  
+  .pt-shell.collapsed { 
+    grid-template-columns: 94px 1fr; 
+  }
+  
+  .pt-main { 
+    min-width: 0; 
+    height: 100vh; 
+    overflow-y: auto;
+    padding: 32px 48px 80px;
+    background: #FAF8F3;
+    font-family: 'Poppins', sans-serif;
+    position: relative;
+    overflow-x: hidden;
   }
 
-  .pt-blob { position: fixed; border-radius: 50%; filter: blur(70px); opacity: 0.45; pointer-events: none; z-index: 0; }
+  @media (max-width: 780px) {
+    .pt-shell, .pt-shell.collapsed { 
+      grid-template-columns: 1fr; 
+    }
+  }
+
+  .pt-blob { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.45; pointer-events: none; z-index: 0; }
   .pt-b1 { width: 450px; height: 450px; background: radial-gradient(circle,#EED6C4,#F5EFE6); top: -100px; right: -80px; animation: ptfb 9s ease-in-out infinite; }
   .pt-b2 { width: 280px; height: 280px; background: radial-gradient(circle,#C8B6A6,#EED6C4); bottom: 80px; left: -60px; animation: ptfb 11s ease-in-out infinite reverse; }
   @keyframes ptfb { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(16px,-16px) scale(1.04)} }
@@ -149,6 +164,9 @@ const css = `
   }
   .pt-icon-btn:hover { background: #EED6C4; transform: scale(1.1); }
   .pt-icon-btn.del:hover { background: #FFEEEE; border-color: #FFBBAA; color: #cc6655; }
+  .pt-icon-btn.confirm-delete { background: #FFEEEE; border-color: #FFBBAA; color: #cc6655; }
+  .pt-icon-btn.confirm-delete:hover { background: #FFD6D6; border-color: #FF9999; color: #aa4444; }
+  .pt-icon-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
   .pt-badge {
     display: inline-flex; align-items: center; gap: 5px;
@@ -157,7 +175,10 @@ const css = `
   }
   .pt-badge.inprogress { background: #FFF3E0; color: #D4854A; border: 1px solid #FFD9A0; }
   .pt-badge.completed { background: #E8F5E9; color: #5A8A6A; border: 1px solid #B8E0C8; }
-  .pt-status-btn { border: none; cursor: pointer; }
+  .pt-badge.updating { opacity: 0.7; cursor: wait; }
+  .pt-status-btn { border: none; cursor: pointer; transition: all 0.2s ease; }
+  .pt-status-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .pt-status-btn:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
   .pt-card-desc { font-size: 0.84rem; color: #8B6F5E; line-height: 1.65; }
 
   .pt-card-dates { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -192,12 +213,14 @@ const css = `
   .pt-empty-desc { font-size: 0.88rem; color: #C8B6A6; }
 
   @media (max-width: 900px) {
-    .pt-shell, .pt-shell.collapsed { grid-template-columns: 1fr; }
-    .pt-page { padding: 80px 24px 60px; }
+    .pt-main { padding: 80px 24px 60px; }
     .pt-title { font-size: 2.2rem; }
     .pt-grid { grid-template-columns: 1fr 1fr; }
     .pt-form-grid { grid-template-columns: 1fr; }
     .pt-form-full { grid-column: 1; }
+  }
+  @media (max-width: 780px) {
+    .pt-shell, .pt-shell.collapsed { grid-template-columns: 1fr; }
   }
   @media (max-width: 600px) {
     .pt-grid { grid-template-columns: 1fr; }
@@ -273,6 +296,7 @@ export default function ProjectTracker() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editId, setEditId] = useState(null);
   const [errors, setErrors] = useState({});
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const stats = {
     total: projects.length,
@@ -280,6 +304,21 @@ export default function ProjectTracker() {
     inProgress: projects.filter((project) => project.status === "In Progress").length,
   };
   const navItems = ["Dashboard", "Analytics", "Projects", "Study Group"];
+
+  function handleNav(item) {
+    if (item === "Projects") return;
+    if (item === "Dashboard") {
+      navigate("/dashboard");
+      return;
+    }
+    if (item === "Analytics") {
+      navigate("/analytics");
+      return;
+    }
+    if (item === "Study Group") {
+      navigate("/study-group");
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -358,23 +397,44 @@ export default function ProjectTracker() {
   };
 
   const handleDelete = async (projectId) => {
+    if (deleteConfirm !== projectId) {
+      setDeleteConfirm(projectId);
+      setTimeout(() => setDeleteConfirm(null), 3000); // Auto-cancel after 3 seconds
+      return;
+    }
+    
     try {
       await removeProject(projectId);
       setProjects((prev) => prev.filter((project) => project.id !== projectId));
       setRequestError("");
+      setDeleteConfirm(null);
     } catch (error) {
       setRequestError(error.message || "Unable to delete project");
+      setDeleteConfirm(null);
     }
   };
 
   const handleStatusToggle = async (project) => {
     const nextStatus = project.status === "Completed" ? "In Progress" : "Completed";
 
+    // Optimistic update for better UX
+    setProjects((prev) => prev.map((entry) => 
+      entry.id === project.id 
+        ? { ...entry, status: nextStatus, updating: true }
+        : entry
+    ));
+
     try {
       const updated = await patchProjectStatus(project.id, nextStatus);
-      setProjects((prev) => prev.map((entry) => (entry.id === updated.id ? updated : entry)));
+      setProjects((prev) => prev.map((entry) => (entry.id === updated.id ? { ...updated, updating: false } : entry)));
       setRequestError("");
     } catch (error) {
+      // Revert on error
+      setProjects((prev) => prev.map((entry) => 
+        entry.id === project.id 
+          ? { ...entry, status: project.status, updating: false }
+          : entry
+      ));
       setRequestError(error.message || "Unable to update project status");
     }
   };
@@ -402,20 +462,7 @@ export default function ProjectTracker() {
           onToggle={() => setCollapsed((prev) => !prev)}
           navItems={navItems}
           activeItem="Projects"
-          onNavigate={(item) => {
-            if (item === "Projects") return;
-            if (item === "Dashboard") {
-              navigate("/dashboard");
-              return;
-            }
-            if (item === "Analytics") {
-              navigate("/analytics");
-              return;
-            }
-            if (item === "Study Group") {
-              navigate("/study-group");
-            }
-          }}
+          onNavigate={handleNav}
           primaryAction={{ label: "Back to Home", onClick: () => navigate("/") }}
           secondaryAction={{
             label: "Sign Out",
@@ -429,20 +476,20 @@ export default function ProjectTracker() {
           navAriaLabel="Projects navigation"
         />
         <main className="pt-main">
+          {requestError ? <div className="pt-banner">{requestError}</div> : null}
+
           <div className="pt-blob pt-b1" />
           <div className="pt-blob pt-b2" />
-          <div className="pt-page">
-            {requestError ? <div className="pt-banner">{requestError}</div> : null}
 
-        <div className="pt-header">
-          <FadeIn>
-            <div className="pt-tag"><div className="pt-dot" /> Project Tracker</div>
-            <h1 className="pt-title">Track your <span>Projects</span></h1>
-            <p className="pt-subtitle">
-              This board now saves through the backend so your project CRUD flow covers GET, POST, PUT, PATCH, and DELETE.
-            </p>
-          </FadeIn>
-        </div>
+          <div className="pt-header">
+            <FadeIn>
+              <div className="pt-tag"><div className="pt-dot" /> Project Tracker</div>
+              <h1 className="pt-title">Track your <span>Projects</span></h1>
+              <p className="pt-subtitle">
+                This board now saves through the backend so your project CRUD flow covers GET, POST, PUT, PATCH, and DELETE.
+              </p>
+            </FadeIn>
+          </div>
 
         <FadeIn delay={80}>
           <div className="pt-stats">
@@ -594,17 +641,35 @@ export default function ProjectTracker() {
                       <div className="pt-card-top">
                         <div className="pt-card-title">{project.title}</div>
                         <div className="pt-card-actions">
-                          <button className="pt-icon-btn" title="Edit" onClick={() => handleEdit(project)}>E</button>
-                          <button className="pt-icon-btn del" title="Delete" onClick={() => handleDelete(project.id)}>X</button>
+                          <button 
+                            className="pt-icon-btn" 
+                            title="Edit project" 
+                            onClick={() => handleEdit(project)}
+                            disabled={submitting}
+                            aria-label={`Edit ${project.title}`}
+                          >
+                            E
+                          </button>
+                          <button 
+                            className={`pt-icon-btn ${deleteConfirm === project.id ? 'confirm-delete' : 'del'}`}
+                            title={deleteConfirm === project.id ? "Click again to confirm delete" : "Delete project"} 
+                            onClick={() => handleDelete(project.id)}
+                            disabled={submitting}
+                            aria-label={deleteConfirm === project.id ? `Confirm delete ${project.title}` : `Delete ${project.title}`}
+                          >
+                            {deleteConfirm === project.id ? '✓' : 'X'}
+                          </button>
                         </div>
                       </div>
 
                       <button
                         type="button"
-                        className={`pt-badge pt-status-btn ${project.status === "Completed" ? "completed" : "inprogress"}`}
+                        className={`pt-badge pt-status-btn ${project.status === "Completed" ? "completed" : "inprogress"} ${project.updating ? "updating" : ""}`}
                         onClick={() => handleStatusToggle(project)}
+                        disabled={submitting || project.updating}
+                        aria-label={`Change status from ${project.status} to ${project.status === "Completed" ? "In Progress" : "Completed"}`}
                       >
-                        {project.status}
+                        {project.updating ? "Updating..." : project.status}
                       </button>
 
                       <p className="pt-card-desc">{project.description}</p>
@@ -634,7 +699,6 @@ export default function ProjectTracker() {
             </div>
           </div>
         ) : null}
-          </div>
         </main>
       </div>
     </>
