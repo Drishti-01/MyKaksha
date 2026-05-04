@@ -520,6 +520,36 @@
   min-height: 0;
 }
 
+.sg2-chat-box {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sg2-chat-empty {
+  margin: auto;
+  text-align: center;
+  padding: 24px 12px;
+}
+
+.sg2-chat-empty-emoji {
+  font-size: 2rem;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.sg2-chat-empty-title {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #8b6f5e;
+}
+
 .sg2-chat-input {
   display: flex;
   align-items: flex-end;
@@ -583,6 +613,13 @@
   animation: slideUp 0.3s ease;
 }
 
+.sg2-message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
 .sg2-message-row.mine {
   justify-content: flex-end;
 }
@@ -592,24 +629,56 @@
 }
 
 .sg2-bubble {
-  max-width: 86%;
-  padding: 10px 12px;
-  border-radius: 14px;
+  box-sizing: border-box;
+  /* Block + 100% width made bubbles full-bleed; fit-content + max-width sizes to text */
+  width: fit-content;
+  max-width: min(88%, 22rem);
+  padding: 10px 14px;
+  border-radius: 16px;
   word-wrap: break-word;
+  overflow-wrap: anywhere;
   font-size: 0.9rem;
 }
 
 .sg2-bubble.mine {
-  background: #c2a189;
+  background: linear-gradient(145deg, #c9a892, #b6937a);
   color: #fff;
-  border-radius: 14px 6px 14px 14px;
+  border-radius: 16px 16px 4px 16px;
 }
 
 .sg2-bubble.other {
   background: #fff;
   color: #4a3728;
-  border-radius: 6px 14px 14px 14px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  border-radius: 16px 16px 16px 4px;
+  border: 1px solid #eee1d4;
+  box-shadow: 0 2px 8px rgba(74, 55, 40, 0.06);
+}
+
+.sg2-bubble strong {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #8b6f5e;
+  margin-bottom: 4px;
+}
+
+.sg2-message-row .sg2-avatar-stack {
+  flex-shrink: 0;
+}
+
+.sg2-message-time {
+  display: block;
+  margin-top: 6px;
+  opacity: 0.85;
+  font-size: 0.72rem;
+}
+
+.sg2-bubble.mine .sg2-message-time {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.sg2-bubble.other .sg2-message-time {
+  color: #a08a79;
 }
 
 .sg2-system-msg {

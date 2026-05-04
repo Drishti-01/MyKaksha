@@ -23,11 +23,82 @@ const roomPresence = new Map();
 /** @type {Set<string>} */
 const lobbySocketIds = new Set();
 
+const STATUS_PRIORITY = {
+  offline: 0,
+  invisible: 0,
+  away: 1,
+  online: 2,
+  break: 3,
+  focusing: 4,
+};
+
 function ensureRoomMap(roomId) {
   if (!roomPresence.has(roomId)) {
     roomPresence.set(roomId, new Map());
   }
   return roomPresence.get(roomId);
+}
+
+function statusPriority(status) {
+  return STATUS_PRIORITY[status] ?? STATUS_PRIORITY.online;
+}
+
+function displayStatusForViewer(meta, isSelf) {
+  if (isSelf) {
+    return meta.status === "invisible" ? "offline" : meta.status;
+  }
+  // "Hide online status" does not apply inside a shared room — people studying together
+  // should see who is present; only explicit invisible is hidden from peers.
+  if (meta.status === "invisible") return "offline";
+  if (!meta.showFocus && (meta.status === "focusing" || meta.status === "break")) {
+    return "online";
+  }
+  return meta.status;
+}
+
+function aggregateRoomMembers(roomId, viewerSocketId) {
+  const map = roomPresence.get(roomId);
+  if (!map) return [];
+
+  const viewerUserId = map.get(viewerSocketId)?.userId || "";
+  const byUserId = new Map();
+
+  for (const meta of map.values()) {
+    const userId = String(meta.userId || meta.socketId || "");
+    if (!userId) continue;
+
+    const isSelf = Boolean(viewerUserId) && userId === viewerUserId;
+    const displayedStatus = displayStatusForViewer(meta, isSelf);
+    const current = byUserId.get(userId);
+
+    if (!current) {
+      byUserId.set(userId, {
+        socketId: meta.socketId,
+        userId,
+        name: meta.name,
+        status: displayedStatus,
+        appearInLeaderboard: meta.appearInLeaderboard !== false,
+        isSelf,
+        _priority: statusPriority(displayedStatus),
+      });
+      continue;
+    }
+
+    const nextPriority = statusPriority(displayedStatus);
+    const shouldReplaceStatus = nextPriority > current._priority;
+
+    byUserId.set(userId, {
+      ...current,
+      socketId: meta.socketId || current.socketId,
+      name: meta.name || current.name,
+      status: shouldReplaceStatus ? displayedStatus : current.status,
+      appearInLeaderboard: current.appearInLeaderboard || meta.appearInLeaderboard !== false,
+      isSelf: current.isSelf || isSelf,
+      _priority: shouldReplaceStatus ? nextPriority : current._priority,
+    });
+  }
+
+  return [...byUserId.values()].map(({ _priority, ...member }) => member);
 }
 
 export function registerLobbySocket(socketId) {
@@ -45,17 +116,12 @@ export function getLobbySocketCount() {
 /** Count of unique users actually in study rooms (not just browsing lobby).
  * Lobby browsers are excluded — only users who have joined a room are counted. */
 export function getGlobalStudyingApproxCount() {
-  const seen = new Set();
-  for (const map of roomPresence.values()) {
-    for (const m of map.values()) {
-      // Only count users whose status is not offline/invisible
-      const status = displayStatusForViewer(m, false);
-      if (status !== "offline") {
-        seen.add(m.userId || m.socketId);
-      }
-    }
+  let count = 0;
+  for (const roomId of roomPresence.keys()) {
+    const visibleMembers = aggregateRoomMembers(roomId, "");
+    count += visibleMembers.filter((member) => member.status !== "offline").length;
   }
-  return seen.size;
+  return count;
 }
 
 export function upsertRoomMember(roomId, meta) {
@@ -89,59 +155,37 @@ export function updateMemberStatus(roomId, socketId, status) {
   map.set(socketId, { ...prev, status });
 }
 
-function displayStatusForViewer(meta, isSelf) {
-  if (isSelf) {
-    return meta.status === "invisible" ? "offline" : meta.status;
-  }
-  if (!meta.showOnline) return "offline";
-  if (meta.status === "invisible") return "offline";
-  if (!meta.showFocus && (meta.status === "focusing" || meta.status === "break")) {
-    return "online";
-  }
-  return meta.status;
-}
-
-export function getRoomMembersForClient(roomId, viewerSocketId) {
+export function updateMemberPrivacy(roomId, socketId, privacy = {}) {
   const map = roomPresence.get(roomId);
-  if (!map) return [];
-
-  return [...map.values()].map((m) => {
-    const isSelf = Boolean(viewerSocketId) && m.socketId === viewerSocketId;
-    const status = displayStatusForViewer(m, isSelf);
-
-    return {
-      socketId: m.socketId,
-      userId: m.userId,
-      name: m.name,
-      status,
-      appearInLeaderboard: m.appearInLeaderboard,
-      isSelf,
-    };
+  if (!map?.has(socketId)) return;
+  const prev = map.get(socketId);
+  map.set(socketId, {
+    ...prev,
+    showOnline: privacy.showOnline !== false,
+    showFocus: privacy.showFocus !== false,
+    appearInLeaderboard: privacy.appearInLeaderboard !== false,
   });
 }
 
+export function getRoomMembersForClient(roomId, viewerSocketId) {
+  return aggregateRoomMembers(roomId, viewerSocketId);
+}
+
 export function getVisibleOnlineCountForRoom(roomId) {
-  const map = roomPresence.get(roomId);
-  if (!map) return 0;
-  let n = 0;
-  for (const m of map.values()) {
-    const status = displayStatusForViewer(m, false);
-    if (status !== "offline") n += 1;
-  }
-  return n;
+  return aggregateRoomMembers(roomId, "").filter((member) => member.status !== "offline").length;
 }
 
 export function getPresenceStripCounts(roomId) {
-  const members = getRoomMembersForClient(roomId, "__none__");
+  const members = aggregateRoomMembers(roomId, "");
   let focusing = 0;
   let onBreak = 0;
   let away = 0;
   let online = 0;
-  for (const m of members) {
-    if (m.status === "offline") continue;
-    if (m.status === "focusing") focusing += 1;
-    else if (m.status === "break") onBreak += 1;
-    else if (m.status === "away") away += 1;
+  for (const member of members) {
+    if (member.status === "offline") continue;
+    if (member.status === "focusing") focusing += 1;
+    else if (member.status === "break") onBreak += 1;
+    else if (member.status === "away") away += 1;
     else online += 1;
   }
   return { focusing, onBreak, away, online };

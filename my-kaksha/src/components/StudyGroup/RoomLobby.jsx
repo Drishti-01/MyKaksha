@@ -26,6 +26,12 @@ function formatRelative(iso) {
   return `${days}d ago`;
 }
 
+function recalculateMostActive(rooms) {
+  return [...(Array.isArray(rooms) ? rooms : [])]
+    .sort((a, b) => (b.onlineCount || 0) - (a.onlineCount || 0))
+    .slice(0, 3);
+}
+
 export default function RoomLobby() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -64,7 +70,7 @@ export default function RoomLobby() {
       ]);
       setRooms(Array.isArray(data.rooms) ? data.rooms : []);
       setTrending(Array.isArray(data.trending) ? data.trending : []);
-      setMostActiveToday(Array.isArray(data.mostActiveToday) ? data.mostActiveToday : []);
+      setMostActiveToday(Array.isArray(data.mostActiveToday) ? data.mostActiveToday : recalculateMostActive(data.rooms));
       setLiveCount(Number(data.globalStudyingApprox) || 0);
       setMyTodayMinutes(Number(data.myTodayMinutes) || 0);
       setMyRooms(Array.isArray(myRoomsData) ? myRoomsData : []);
@@ -110,6 +116,28 @@ export default function RoomLobby() {
       setLiveCount(Number(count) || 0);
     });
 
+    socket.on("room-presence-update", ({ roomId, onlineCount, status }) => {
+      if (!roomId) return;
+
+      setRooms((prev) => {
+        const next = (prev || []).map((room) => (
+          room.id === roomId
+            ? { ...room, onlineCount: Number(onlineCount) || 0, status: status || room.status }
+            : room
+        ));
+        setMostActiveToday(recalculateMostActive(next));
+        return next;
+      });
+
+      setMyRooms((prev) => (
+        (prev || []).map((room) => (
+          room.id === roomId
+            ? { ...room, onlineCount: Number(onlineCount) || 0 }
+            : room
+        ))
+      ));
+    });
+
     socket.on("room-created", () => {
       load();
     });
@@ -118,6 +146,7 @@ export default function RoomLobby() {
 
     return () => {
       lobbyJoinSentRef.current = false;
+      socket.off("room-presence-update");
       socket.emit("lobby-leave");
       socket.disconnect();
       lobbySocketRef.current = null;

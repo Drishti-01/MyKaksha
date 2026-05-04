@@ -39,7 +39,38 @@ function dedupeMessages(rows) {
   });
 }
 
-export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPaused, pausedMessage, isActiveTab, onUnreadChange }) {
+function messageStableKey(m) {
+  const id = m?.serverId || m?.id;
+  if (id) return `id:${String(id)}`;
+  if (m?.clientMessageId) return `cid:${m.clientMessageId}`;
+  return `t:${m?.timestamp || ""}|${m?.sender?.userId || ""}|${String(m?.content || "").slice(0, 120)}`;
+}
+
+/** Merge server history with existing UI state so chat-history never wipes messages loaded from REST. */
+function mergeChatMessages(prevRows, incomingRaw) {
+  const incoming = Array.isArray(incomingRaw) ? incomingRaw.map(normalizeIncoming) : [];
+  if (incoming.length === 0) return prevRows || [];
+  const map = new Map();
+  for (const m of dedupeMessages(prevRows || [])) {
+    map.set(messageStableKey(m), m);
+  }
+  for (const m of dedupeMessages(incoming)) {
+    map.set(messageStableKey(m), m);
+  }
+  return [...map.values()].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+}
+
+export default function ChatPanel({
+  roomId,
+  socketRef,
+  socketEpoch = 0,
+  meUserId,
+  meName,
+  chatPaused,
+  pausedMessage,
+  isActiveTab,
+  onUnreadChange,
+}) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -77,8 +108,8 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
         const data = await fetchRoomMessages(roomId);
         if (cancelled) return;
         const list = dedupeMessages((data.messages || []).map(normalizeIncoming));
-        setMessages(list);
-        setHasOlder(list.length >= 50);
+        setMessages((prev) => mergeChatMessages(prev, list));
+        setHasOlder((data.messages || []).length >= 50);
       } catch {
         if (!cancelled) setMessages([]);
       }
@@ -99,7 +130,7 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
       const msg = normalizeIncoming(incoming);
       // Always reset sending state when we get any message from ourselves
       // Do this BEFORE dedup check so it always fires
-      if ((msg.sender?.userId || "") === String(meUserId)) {
+      if (String(msg.sender?.userId || "") === String(meUserId || "")) {
         setSending(false);
         setText("");
         // Clear the safety timeout
@@ -109,7 +140,7 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
         }
       }
       setMessages((prev) => upsertIncoming(prev, msg));
-      if (!isActiveTab && (msg.sender?.userId || "") !== String(meUserId)) {
+      if (!isActiveTab && String(msg.sender?.userId || "") !== String(meUserId || "")) {
         onUnreadChange?.((v) => (v || 0) + 1);
       }
     };
@@ -147,14 +178,28 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
     socket.on("user-joined-room", onSystem);
     socket.on("user-left-room", onSystem);
 
-    // Listen for chat history sent by server on room join
+    // Server sends recent messages on join — merge so we never replace a good REST load with [] or a subset
     const onChatHistory = (history) => {
       if (!Array.isArray(history)) return;
-      const normalized = dedupeMessages(history.map(normalizeIncoming));
-      setMessages(normalized);
-      setHasOlder(normalized.length >= 50);
+      setMessages((prev) => mergeChatMessages(prev, history));
+      if (history.length >= 50) setHasOlder(true);
     };
     socket.on("chat-history", onChatHistory);
+
+    const refreshFromServer = () => {
+      void (async () => {
+        try {
+          const data = await fetchRoomMessages(roomId);
+          const list = dedupeMessages((data.messages || []).map(normalizeIncoming));
+          setMessages((prev) => mergeChatMessages(prev, list));
+          setHasOlder((data.messages || []).length >= 50);
+        } catch {
+          /* keep current messages */
+        }
+      })();
+    };
+    socket.on("connect", refreshFromServer);
+    if (socket.connected) refreshFromServer();
 
     // Listen for message-error so sending state is never stuck
     const onMessageError = () => {
@@ -175,9 +220,10 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
       socket.off("user-joined-room", onSystem);
       socket.off("user-left-room", onSystem);
       socket.off("chat-history", onChatHistory);
+      socket.off("connect", refreshFromServer);
       socket.off("message-error", onMessageError);
     };
-  }, [socketRef, roomId, isActiveTab, meUserId, onUnreadChange]);
+  }, [socketRef, socketEpoch, roomId, isActiveTab, meUserId, onUnreadChange]);
 
   useEffect(() => {
     if (!boxRef.current) return;
@@ -285,7 +331,7 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
         ) : null}
 
         {messages.map((msg) => {
-          const isMine = msg.sender.userId === meUserId;
+          const isMine = String(msg.sender?.userId || "") === String(meUserId || "");
           const isSystem = msg.type === "system";
           if (isSystem) {
             return (

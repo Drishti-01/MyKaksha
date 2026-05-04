@@ -1,7 +1,8 @@
-﻿function badgeClass(status) {
+function badgeClass(status) {
   if (status === "focusing") return "sg2-status-focusing";
   if (status === "break") return "sg2-status-break";
   if (status === "away") return "sg2-status-away";
+  if (status === "offline") return "sg2-status-offline";
   return "sg2-status-online";
 }
 
@@ -9,6 +10,7 @@ function badgeLabel(status) {
   if (status === "focusing") return "🎯 Focusing";
   if (status === "break") return "☕ Break";
   if (status === "away") return "Away";
+  if (status === "offline") return "Offline";
   return "Online";
 }
 
@@ -39,7 +41,7 @@ export default function MembersPanel({ members, roomCode, meName, statsByUser, m
         {members.map((m) => {
           const stats = statsByUser[m.userId] || {};
           const focusMin = Number(stats.totalFocusMinutes || 0);
-          const isMe = meName && m.name === meName;
+          const isMe = Boolean(m.isSelf) || (meName && m.name === meName);
           return (
             <li key={m.socketId || `${m.userId}-${m.name}`} className="sg2-member-row">
               <span className="sg2-status-dot" style={{ background: statusDot(m.status) }} />
