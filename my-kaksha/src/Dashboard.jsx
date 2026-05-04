@@ -4,6 +4,8 @@ import { fetchStudyData, saveStudyData } from "./api/studyData";
 import { useAuth } from "./auth/useAuth";
 import AppSidebar from "./components/AppSidebar";
 import timerBg from "./components/download (13).jpg";
+import taskBg from "./components/Taskbg.jpg";
+import goalsBg from "./components/bg.png";
 import useSidebarState from "./components/useSidebarState";
 
 const PROJECTS_STORAGE_KEY = "mykaksha_projects";
@@ -65,9 +67,10 @@ const css = `
 
   .d-task-card {
     position: relative;
-    background:
-      linear-gradient(135deg, rgba(255, 253, 249, 0.98), rgba(246, 239, 229, 0.94)),
-      repeating-linear-gradient(0deg, transparent 0 31px, rgba(200, 182, 166, 0.16) 32px);
+    background-image: url("${taskBg}");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -428,10 +431,10 @@ const css = `
     overflow: hidden;
     display: grid;
     gap: 14px;
-    background:
-      radial-gradient(circle at 90% 12%, rgba(168, 203, 213, 0.38), transparent 28%),
-      radial-gradient(circle at 8% 95%, rgba(238, 177, 118, 0.28), transparent 24%),
-      linear-gradient(135deg, #fffdf9 0%, #f8f1e7 52%, #eef6f3 100%);
+    background-image: url("${goalsBg}");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
   }
 
   .goals-card::after {
