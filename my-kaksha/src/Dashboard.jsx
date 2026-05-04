@@ -773,7 +773,6 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
   const { signOut, user } = useAuth();
   const [collapsed, setCollapsed] = useSidebarState();
   const [activeNav, setActiveNav] = useState("Dashboard");
-  const { user } = useAuth();
 
   const [focusMinutes, setFocusMinutes] = useState(25);
   const [breakMinutes, setBreakMinutes] = useState(5);
