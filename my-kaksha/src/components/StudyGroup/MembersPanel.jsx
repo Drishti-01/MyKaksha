@@ -41,7 +41,7 @@ export default function MembersPanel({ members, roomCode, meName, statsByUser, m
         {members.map((m) => {
           const stats = statsByUser[m.userId] || {};
           const focusMin = Number(stats.totalFocusMinutes || 0);
-          const isMe = meName && m.name === meName;
+          const isMe = Boolean(m.isSelf) || (meName && m.name === meName);
           return (
             <li key={m.socketId || `${m.userId}-${m.name}`} className="sg2-member-row">
               <span className="sg2-status-dot" style={{ background: statusDot(m.status) }} />

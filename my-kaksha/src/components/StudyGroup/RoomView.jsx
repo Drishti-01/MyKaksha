@@ -105,6 +105,7 @@ export default function RoomView() {
   const [unreadChat, setUnreadChat] = useState(0);
 
   const { settings, update, privacyPayload } = usePresence();
+  const privacyRef = useRef(privacyPayload);
 
   const displayName = user?.name || localStorage.getItem("myKakshaUserName") || "Student";
   const userId = user?.id || "guest";
@@ -127,6 +128,10 @@ export default function RoomView() {
     () => mergeRoomMembersWithPresence(members, room?.members, userId),
     [members, room?.members, userId]
   );
+
+  useEffect(() => {
+    privacyRef.current = privacyPayload;
+  }, [privacyPayload]);
 
   const todayMinutesForMe = Number(statsByUser[userId]?.totalFocusMinutes || 0);
 
@@ -173,8 +178,12 @@ export default function RoomView() {
   });
 
   useEffect(() => {
-    if (!roomId) return undefined;
+    if (!roomId) return;
     rememberRoom(roomId, room?.name);
+  }, [roomId, room?.name]);
+
+  useEffect(() => {
+    if (!roomId) return undefined;
 
     const socket = io({
       path: "/socket.io",
@@ -219,7 +228,7 @@ export default function RoomView() {
       joinSentRef.current = true;
       socket.emit("join-room", {
         roomId,
-        privacy: privacyPayload,
+        privacy: privacyRef.current,
       });
       socket.emit("get-room-members", (res) => {
         if (Array.isArray(res?.members)) setMembers(dedupeByUserId(res.members));
@@ -299,7 +308,14 @@ export default function RoomView() {
       // Members should persist in MongoDB until they explicitly click "Leave Room"
       // The socket disconnect event on server will handle presence cleanup only
     };
-  }, [roomId, privacyPayload, reload, setRoomStatsRows, setMyStats, room?.name, userId, displayName]);
+  }, [roomId, reload, setRoomStatsRows, setMyStats, userId, displayName]);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !roomId) return;
+    if (!socket.connected) return;
+    socket.emit("privacy-update", { roomId, privacy: privacyPayload });
+  }, [roomId, privacyPayload]);
 
   useEffect(() => {
     if (tab === "chat") {
@@ -349,6 +365,7 @@ export default function RoomView() {
 
   const accent = roomAccent(room.name);
   const visibleMembers = dedupeByUserId(mergedMembers);
+  const liveMembers = visibleMembers.filter((member) => member.status !== "offline");
   const presenceCounts = stripCounts(visibleMembers);
   const leaderboardRows = weeklyLeaderboard.length > 0
     ? weeklyLeaderboard.map((row) => ({
@@ -393,7 +410,7 @@ export default function RoomView() {
 
         <div style={{ display: "grid", justifyItems: "end", gap: 8 }}>
           <div className="sg2-inline-row" style={{ gap: 6 }}>
-            {visibleMembers.slice(0, 5).map((m) => (
+            {liveMembers.slice(0, 5).map((m) => (
               <span key={`${m.userId}-${m.name}`} className="sg2-avatar-stack" title={m.name}>{String(m.name || "?").slice(0, 1).toUpperCase()}</span>
             ))}
             <span className="sg2-badge">{presenceCounts.online + presenceCounts.focusing + presenceCounts.onBreak + presenceCounts.away} online</span>
@@ -481,7 +498,7 @@ export default function RoomView() {
                 onUnreadChange={setUnreadChat}
               />
             ) : null}
-            {tab === "members" ? <MembersPanel members={membersStudyRows.rows} roomCode={room.code} meName={displayName} statsByUser={statsByUser} maxFocus={membersStudyRows.max} /> : null}
+            {tab === "members" ? <MembersPanel members={liveMembers} roomCode={room.code} meName={displayName} statsByUser={statsByUser} maxFocus={membersStudyRows.max} /> : null}
             {tab === "leaderboard" ? <LeaderboardPanel rows={leaderboardRows} myUserId={userId} /> : null}
           </div>
           </div>

@@ -12,7 +12,7 @@ import { createApp } from "./app.js";
 import { ensureDatabaseConnection } from "./config/database.js";
 import Room from "./models/Room.js";
 import Message from "./models/Message.js";
-import { seedDefaultRooms } from "./services/roomStore.js";
+import { findRoomById, seedDefaultRooms } from "./services/roomStore.js";
 import { createChatMessage, readRecentChatMessages } from "./services/chatStore.js";
 import { AUTH_COOKIE_NAME, verifyAuthToken } from "./utils/auth.js";
 import {
@@ -30,6 +30,8 @@ import {
   updateMemberStatus,
   upsertRoomMember,
   getGlobalStudyingApproxCount,
+  getVisibleOnlineCountForRoom,
+  updateMemberPrivacy,
 } from "./services/studyPresenceRegistry.js";
 import { readSession, touchSession } from "./services/sessionStore.js";
 
@@ -60,29 +62,29 @@ function readCookieValue(cookieHeader, name) {
   return "";
 }
 
-function dedupeMembersByUserId(members = []) {
-  const map = new Map();
-  for (const member of members) {
-    const key = String(member?.userId || "");
-    if (!key || map.has(key)) continue;
-    map.set(key, member);
-  }
-  return [...map.values()];
-}
-
 function broadcastPresence(roomId) {
   const roomSockets = io.sockets.adapter.rooms.get(roomId);
   if (!roomSockets) return;
   for (const socketId of roomSockets) {
     const sock = io.sockets.sockets.get(socketId);
     if (!sock) continue;
-    const members = dedupeMembersByUserId(getRoomMembersForClient(roomId, socketId));
+    const members = getRoomMembersForClient(roomId, socketId);
     sock.emit("room-members-update", { roomId, members });
   }
 }
 
 function emitLobbyCount() {
   io.to("lobby").emit("lobby-presence", { count: getGlobalStudyingApproxCount() });
+}
+
+async function emitRoomPresenceUpdate(roomId) {
+  if (!roomId) return;
+  const room = await findRoomById(roomId).catch(() => null);
+  if (!room) return;
+  const onlineCount = getVisibleOnlineCountForRoom(roomId);
+  const cap = 24;
+  const status = (room.members || []).length >= cap ? "Full" : onlineCount < 2 ? "Quiet" : "Active";
+  io.to("lobby").emit("room-presence-update", { roomId, onlineCount, status });
 }
 
 function normalizedStatus(status) {
@@ -176,6 +178,7 @@ io.on("connection", (socket) => {
           timestamp: new Date().toISOString(),
         });
         broadcastPresence(prevRoom);
+        void emitRoomPresenceUpdate(prevRoom);
       }
 
       socket.join(roomId);
@@ -197,6 +200,7 @@ io.on("connection", (socket) => {
 
       // Notify everyone immediately — do not wait on DB; a slow/failed session write must not hide the member
       broadcastPresence(roomId);
+      void emitRoomPresenceUpdate(roomId);
 
   // Add user to Room.members in MongoDB
   // Strategy: use findByIdAndUpdate with $push + $ne filter on the array element
@@ -306,6 +310,17 @@ io.on("connection", (socket) => {
       name: socket.userName || socket.data.username,
       status,
     });
+    void emitRoomPresenceUpdate(roomId);
+  });
+
+  socket.on("privacy-update", (payload = {}) => {
+    const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
+    if (!roomId) return;
+    const privacy = payload.privacy && typeof payload.privacy === "object" ? payload.privacy : {};
+    socket.data.privacy = privacy;
+    updateMemberPrivacy(roomId, socket.id, privacy);
+    broadcastPresence(roomId);
+    void emitRoomPresenceUpdate(roomId);
   });
 
   socket.on("typing", (payload = {}) => {
@@ -443,7 +458,7 @@ io.on("connection", (socket) => {
     const roomId = socket.data.roomId;
     if (typeof cb !== "function") return;
     if (!roomId) return cb({ members: [] });
-    cb({ members: dedupeMembersByUserId(getRoomMembersForClient(roomId, socket.id)) });
+    cb({ members: getRoomMembersForClient(roomId, socket.id) });
   });
 
   // Explicit leave-room event — called when user clicks "Leave Room" button
@@ -472,6 +487,7 @@ io.on("connection", (socket) => {
 
     broadcastPresence(targetRoom);
     emitLobbyCount();
+    void emitRoomPresenceUpdate(targetRoom);
   });
 
   socket.on("disconnect", async () => {
@@ -517,6 +533,7 @@ io.on("connection", (socket) => {
     }
 
     broadcastPresence(roomId);
+    void emitRoomPresenceUpdate(roomId);
   });
 });
 
