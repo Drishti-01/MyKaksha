@@ -93,7 +93,8 @@ function displayStatusForViewer(meta, isSelf) {
   if (isSelf) {
     return meta.status === "invisible" ? "offline" : meta.status;
   }
-  if (!meta.showOnline) return "offline";
+  // "Hide online status" does not apply inside a shared room — people studying together
+  // should see who is present; only explicit invisible is hidden from peers.
   if (meta.status === "invisible") return "offline";
   if (!meta.showFocus && (meta.status === "focusing" || meta.status === "break")) {
     return "online";

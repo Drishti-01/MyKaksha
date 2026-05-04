@@ -153,14 +153,15 @@ export default function RoomView() {
   }, [roomId, userId, displayName]);
 
   const emitStatus = useCallback((status) => {
-    const finalStatus = !settings.showOnline && status === "online" ? "invisible" : status;
+    // Always send real timer status in-room so others see online / focus / break.
+    // "Hide online" is not applied to people in the same study room together.
     socketRef.current?.emit("user-status-update", {
       roomId,
       userId,
       name: displayName,
-      status: finalStatus,
+      status,
     });
-  }, [settings.showOnline, roomId, userId, displayName]);
+  }, [roomId, userId, displayName]);
 
   const timer = useTimer({
     socketRef,
@@ -469,6 +470,7 @@ export default function RoomView() {
             {tab === "chat" ? (
               <ChatPanel
                 key={socketKey}
+                socketEpoch={socketKey}
                 roomId={roomId}
                 socketRef={socketRef}
                 meUserId={userId}

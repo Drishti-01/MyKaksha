@@ -9,6 +9,9 @@
         <span>Show my online status</span>
         <input type="checkbox" checked={settings.showOnline} onChange={(e) => onChange({ showOnline: e.target.checked })} />
       </label>
+      <p className="sg2-soft-text" style={{ margin: "0 0 10px", fontSize: "0.78rem" }}>
+        People in the same room always see who is here (online, focusing, or on a break).
+      </p>
 
       <label className="sg2-toggle-row">
         <span>Show my focus status to room</span>
