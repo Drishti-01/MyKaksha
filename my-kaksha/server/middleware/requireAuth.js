@@ -1,15 +1,3 @@
-// JWT Authentication Flow:
-// 1. User logs in → server creates JWT with userId payload
-// 2. JWT sent to client in cookie or response body
-// 3. Client sends JWT in every protected request (via httpOnly cookie)
-// 4. This middleware verifies JWT signature and expiry
-// 5. If valid: sets req.auth (with user info) and calls next()
-// 6. If invalid: returns 401 Unauthorized
-//
-// Concept 5 — JWT Authentication (Backend Engineering-I Eval-II)
-// JWT is stateless: the server does NOT store the token
-// The token itself contains the payload (userId, email, name, sessionId)
-// Signature verification ensures the token was not tampered with
 
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { AUTH_COOKIE_NAME, SESSION_COOKIE_NAME, verifyAuthToken } from "../utils/auth.js";
