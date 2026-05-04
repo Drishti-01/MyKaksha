@@ -142,15 +142,38 @@ export default function LoginPage() {
   const { refreshUser } = useAuth();
   const [form, setForm] = useState({ email: "", password: "" });
   const [state, setState] = useState({ loading: false, message: "" });
+  const [fieldErrors, setFieldErrors] = useState({});
 
   function handleChange(event) {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    // Clear field error when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+    }
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
     setState({ loading: true, message: "" });
+    setFieldErrors({});
+
+    // Client-side validation
+    const errors = {};
+    if (!form.email.trim()) {
+      errors.email = "Email is required";
+    } else if (!/\S+@\S+\.\S+/.test(form.email)) {
+      errors.email = "Please enter a valid email address";
+    }
+    if (!form.password) {
+      errors.password = "Password is required";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setState({ loading: false, message: "" });
+      return;
+    }
 
     try {
       await loginUser({
@@ -180,11 +203,45 @@ export default function LoginPage() {
           <form className="auth-form" onSubmit={handleSubmit}>
             <div className="auth-field">
               <label htmlFor="email">Email</label>
-              <input id="email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="you@example.com" required />
+              <input 
+                id="email" 
+                name="email" 
+                type="email" 
+                value={form.email} 
+                onChange={handleChange} 
+                placeholder="you@example.com" 
+                required 
+                disabled={state.loading}
+                style={fieldErrors.email ? { borderColor: '#dc2626', background: '#fef2f2' } : {}}
+                aria-invalid={!!fieldErrors.email}
+                aria-describedby={fieldErrors.email ? "email-error" : undefined}
+              />
+              {fieldErrors.email && (
+                <span id="email-error" style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '4px' }} role="alert">
+                  {fieldErrors.email}
+                </span>
+              )}
             </div>
             <div className="auth-field">
               <label htmlFor="password">Password</label>
-              <input id="password" name="password" type="password" value={form.password} onChange={handleChange} placeholder="••••••••" required />
+              <input 
+                id="password" 
+                name="password" 
+                type="password" 
+                value={form.password} 
+                onChange={handleChange} 
+                placeholder="••••••••" 
+                required 
+                disabled={state.loading}
+                style={fieldErrors.password ? { borderColor: '#dc2626', background: '#fef2f2' } : {}}
+                aria-invalid={!!fieldErrors.password}
+                aria-describedby={fieldErrors.password ? "password-error" : undefined}
+              />
+              {fieldErrors.password && (
+                <span id="password-error" style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '4px' }} role="alert">
+                  {fieldErrors.password}
+                </span>
+              )}
             </div>
 
             {state.message ? (

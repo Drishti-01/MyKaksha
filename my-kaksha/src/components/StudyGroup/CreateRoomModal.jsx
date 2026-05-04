@@ -6,6 +6,7 @@ export default function CreateRoomModal({ open, onClose, onCreate, loading }) {
   const [focusStyle, setFocusStyle] = useState("discussion");
   const [weeklyGoal, setWeeklyGoal] = useState("");
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
     if (!open) return;
@@ -14,6 +15,7 @@ export default function CreateRoomModal({ open, onClose, onCreate, loading }) {
     setFocusStyle("discussion");
     setWeeklyGoal("");
     setError("");
+    setFieldErrors({});
   }, [open]);
 
   if (!open) return null;
@@ -21,10 +23,24 @@ export default function CreateRoomModal({ open, onClose, onCreate, loading }) {
   async function submit(e) {
     e.preventDefault();
     setError("");
+    setFieldErrors({});
+    
+    const errors = {};
     if (!name.trim()) {
-      setError("Room name is required");
+      errors.name = "Room name is required";
+    }
+    if (name.trim().length > 50) {
+      errors.name = "Room name must be 50 characters or less";
+    }
+    if (weeklyGoal !== "" && (Number(weeklyGoal) < 0 || Number(weeklyGoal) > 168)) {
+      errors.weeklyGoal = "Weekly goal must be between 0 and 168 hours";
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
+    
     try {
       await onCreate({
         name: name.trim(),
@@ -68,25 +84,41 @@ export default function CreateRoomModal({ open, onClose, onCreate, loading }) {
 
         <form onSubmit={submit} style={{ marginTop: 16, display: "grid", gap: 12 }}>
           <label style={{ display: "grid", gap: 6, fontSize: "0.85rem", color: "#6e5644" }}>
-            Room Name
-            <input className="sg2-input" value={name} onChange={(e) => setName(e.target.value)} disabled={loading} />
+            Room Name *
+            <input 
+              className={`sg2-input ${fieldErrors.name ? 'error' : ''}`}
+              value={name} 
+              onChange={(e) => setName(e.target.value)} 
+              disabled={loading}
+              maxLength={50}
+              style={fieldErrors.name ? { borderColor: '#dc2626', background: '#fef2f2' } : {}}
+              aria-invalid={!!fieldErrors.name}
+              aria-describedby={fieldErrors.name ? "name-error" : undefined}
+            />
+            {fieldErrors.name && (
+              <span id="name-error" style={{ color: '#dc2626', fontSize: '0.75rem' }} role="alert">
+                {fieldErrors.name}
+              </span>
+            )}
           </label>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <span style={{ fontSize: "0.85rem", color: "#6e5644" }}>Room Type</span>
             <button
               type="button"
-              className={`sg2-btn secondary ${type === "public" ? "" : ""}`}
+              className={`sg2-btn secondary ${type === "public" ? "sg2-active-btn" : ""}`}
               onClick={() => setType("public")}
-              style={{ opacity: type === "public" ? 1 : 0.6 }}
+              disabled={loading}
+              aria-pressed={type === "public"}
             >
               Public
             </button>
             <button
               type="button"
-              className={`sg2-btn secondary`}
+              className={`sg2-btn secondary ${type === "private" ? "sg2-active-btn" : ""}`}
               onClick={() => setType("private")}
-              style={{ opacity: type === "private" ? 1 : 0.6 }}
+              disabled={loading}
+              aria-pressed={type === "private"}
             >
               Private
             </button>
@@ -96,17 +128,19 @@ export default function CreateRoomModal({ open, onClose, onCreate, loading }) {
             <span style={{ fontSize: "0.85rem", color: "#6e5644" }}>Focus Style</span>
             <button
               type="button"
-              className="sg2-btn secondary"
+              className={`sg2-btn secondary ${focusStyle === "discussion" ? "sg2-active-btn" : ""}`}
               onClick={() => setFocusStyle("discussion")}
-              style={{ opacity: focusStyle === "discussion" ? 1 : 0.6 }}
+              disabled={loading}
+              aria-pressed={focusStyle === "discussion"}
             >
               Discussion
             </button>
             <button
               type="button"
-              className="sg2-btn secondary"
+              className={`sg2-btn secondary ${focusStyle === "silent" ? "sg2-active-btn" : ""}`}
               onClick={() => setFocusStyle("silent")}
-              style={{ opacity: focusStyle === "silent" ? 1 : 0.6 }}
+              disabled={loading}
+              aria-pressed={focusStyle === "silent"}
             >
               Silent Study
             </button>
@@ -115,14 +149,23 @@ export default function CreateRoomModal({ open, onClose, onCreate, loading }) {
           <label style={{ display: "grid", gap: 6, fontSize: "0.85rem", color: "#6e5644" }}>
             Weekly goal (hours, optional)
             <input
-              className="sg2-input"
+              className={`sg2-input ${fieldErrors.weeklyGoal ? 'error' : ''}`}
               type="number"
               min={0}
+              max={168}
               step={0.5}
               value={weeklyGoal}
               onChange={(e) => setWeeklyGoal(e.target.value)}
               disabled={loading}
+              style={fieldErrors.weeklyGoal ? { borderColor: '#dc2626', background: '#fef2f2' } : {}}
+              aria-invalid={!!fieldErrors.weeklyGoal}
+              aria-describedby={fieldErrors.weeklyGoal ? "goal-error" : undefined}
             />
+            {fieldErrors.weeklyGoal && (
+              <span id="goal-error" style={{ color: '#dc2626', fontSize: '0.75rem' }} role="alert">
+                {fieldErrors.weeklyGoal}
+              </span>
+            )}
           </label>
 
           <p style={{ margin: 0, fontSize: "0.78rem", color: "#8b6f5e" }}>
@@ -139,7 +182,12 @@ export default function CreateRoomModal({ open, onClose, onCreate, loading }) {
             <button type="button" className="sg2-btn secondary" onClick={onClose} disabled={loading}>
               Cancel
             </button>
-            <button type="submit" className="sg2-btn" disabled={loading}>
+            <button 
+              type="submit" 
+              className="sg2-btn" 
+              disabled={loading || !name.trim()}
+              aria-label={loading ? "Creating room..." : "Create new study room"}
+            >
               {loading ? "Creating…" : "Create"}
             </button>
           </div>

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useEffect, useMemo, useState } from "react";
 import { fetchCurrentUser, logoutUser } from "../api/auth";
-import { AuthContext } from "./auth-context";
+
+export const AuthContext = createContext(null);
 
 function syncStoredUser(user) {
   if (user?.email) {

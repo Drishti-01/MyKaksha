@@ -76,6 +76,13 @@
   color: #4a3728;
 }
 
+.mk-nav-btn:disabled,
+.mk-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .mk-nav-icon {
   width: 18px;
   height: 18px;
@@ -149,15 +156,4 @@
 .pt-shell > .pt-main {
   min-width: 0;
   overflow-x: hidden;
-}
-
-/* Dashboard shell needs height constraint so collapsed sidebar doesn't take full width */
-.d-shell {
-  height: 100vh;
-  overflow: hidden;
-}
-
-.d-shell > .d-main {
-  height: 100vh;
-  overflow-y: auto;
 }

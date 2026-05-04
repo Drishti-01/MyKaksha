@@ -32,9 +32,29 @@ export default function TimerPanel({
     <section className="sg2-panel" aria-label="Group sync timer">
       <div className="sg2-inline-row" style={{ alignItems: "center", marginBottom: 10 }}>
         <span className="sg2-section-title" style={{ margin: 0 }}>Group Sync Timer</span>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" className={`sg2-btn secondary ${timerScope === "personal" ? "sg2-active-btn" : ""}`} onClick={() => onTimerScopeChange("personal")}>Personal Mode</button>
-          <button type="button" className={`sg2-btn secondary ${timerScope === "group" ? "sg2-active-btn" : ""}`} onClick={() => onTimerScopeChange("group")}>Group Mode</button>
+        <div style={{ display: "flex", gap: 8 }} role="tablist" aria-label="Timer mode selection">
+          <button 
+            type="button" 
+            className={`sg2-btn secondary ${timerScope === "personal" ? "sg2-active-btn" : ""}`} 
+            onClick={() => onTimerScopeChange("personal")}
+            role="tab"
+            aria-selected={timerScope === "personal"}
+            aria-controls="timer-panel"
+            id="personal-mode-tab"
+          >
+            Personal Mode
+          </button>
+          <button 
+            type="button" 
+            className={`sg2-btn secondary ${timerScope === "group" ? "sg2-active-btn" : ""}`} 
+            onClick={() => onTimerScopeChange("group")}
+            role="tab"
+            aria-selected={timerScope === "group"}
+            aria-controls="timer-panel"
+            id="group-mode-tab"
+          >
+            Group Mode
+          </button>
         </div>
       </div>
 
@@ -73,11 +93,32 @@ export default function TimerPanel({
       </p>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 12 }}>
-        <button type="button" className="sg2-btn" onClick={running ? onPause : onStart} disabled={timerScope === "group" && !canControlGroup}>
+        <button 
+          type="button" 
+          className="sg2-btn" 
+          onClick={running ? onPause : onStart} 
+          disabled={timerScope === "group" && !canControlGroup}
+          aria-label={running ? "Pause timer" : "Start timer"}
+        >
           {running ? "Pause" : "Start"}
         </button>
-        <button type="button" className="sg2-btn secondary" onClick={onReset} disabled={timerScope === "group" && !canControlGroup}>Reset</button>
-        <button type="button" className="sg2-btn secondary" onClick={onSwitchPhase}>Switch Focus/Break</button>
+        <button 
+          type="button" 
+          className="sg2-btn secondary" 
+          onClick={onReset} 
+          disabled={timerScope === "group" && !canControlGroup}
+          aria-label="Reset timer to initial state"
+        >
+          Reset
+        </button>
+        <button 
+          type="button" 
+          className="sg2-btn secondary" 
+          onClick={onSwitchPhase}
+          aria-label="Switch between focus and break mode"
+        >
+          Switch Focus/Break
+        </button>
       </div>
 
       {celebrate ? (

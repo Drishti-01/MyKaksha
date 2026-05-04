@@ -259,43 +259,10 @@ io.on("connection", (socket) => {
   });
 
   socket.on("study-time-update", async (payload = {}) => {
-    try {
-      const roomId = typeof payload.roomId === "string" ? payload.roomId.trim() : socket.data.roomId;
-      if (!roomId) return;
-      const userId = socket.userId || socket.data.userId;
-      const userName = socket.userName || socket.data.username;
-      const todayMinutes = Math.max(0, Number(payload.todayMinutes) || 0);
-      const sessionsToday = Math.max(0, Number(payload.sessionsToday) || 0);
-
-      const stats = await upsertUserRoomStats({
-        roomId,
-        userId,
-        userName,
-        deltaMinutes: todayMinutes,
-        deltaSessions: sessionsToday,
-      });
-
-      io.to(roomId).emit("study-time-updated", {
-        roomId,
-        userId,
-        userName,
-        totalFocusMinutes: stats.totalFocusMinutes || 0,
-        sessionsCompleted: stats.sessionsCompleted || 0,
-      });
-
-      io.to(roomId).emit("study-time-update", {
-        roomId,
-        userId,
-        name: userName,
-        todayMinutes: stats.totalFocusMinutes || 0,
-        sessionsToday: stats.sessionsCompleted || 0,
-      });
-
-      const allStats = await getRoomStats(roomId);
-      io.to(roomId).emit("room-stats", { roomId, stats: allStats });
-    } catch (error) {
-      console.warn("Socket study-time-update failed:", error?.message || error);
-    }
+    // DEPRECATED: This event should not be used to update database stats
+    // Only session-complete should increment actual study time
+    // This event is kept for backward compatibility but does nothing
+    console.log("[socket] study-time-update: deprecated event ignored, use session-complete instead");
   });
 
   socket.on("session-complete", async (payload = {}) => {

@@ -45,6 +45,7 @@ export default function AppSidebar({
   noteTitle,
   noteText,
   navAriaLabel = "Primary navigation",
+  loading = false,
 }) {
   return (
     <aside className={`mk-sidebar ${collapsed ? "collapsed" : ""}`}>
@@ -70,6 +71,9 @@ export default function AppSidebar({
             type="button"
             className={`mk-nav-btn ${item === activeItem ? "active" : ""}`}
             onClick={() => onNavigate(item)}
+            disabled={loading}
+            aria-current={item === activeItem ? "page" : undefined}
+            aria-label={`Navigate to ${item}`}
           >
             <span className="mk-nav-icon">{SIDEBAR_ICONS[item] ?? SIDEBAR_ICONS.Dashboard}</span>
             <span className="mk-label">{item}</span>
@@ -79,13 +83,25 @@ export default function AppSidebar({
 
       <div className="mk-footer">
         {primaryAction ? (
-          <button type="button" className="mk-action-btn" onClick={primaryAction.onClick}>
+          <button 
+            type="button" 
+            className="mk-action-btn" 
+            onClick={primaryAction.onClick}
+            disabled={loading}
+            aria-label={primaryAction.label}
+          >
             {primaryAction.label}
           </button>
         ) : null}
 
         {secondaryAction ? (
-          <button type="button" className="mk-action-btn" onClick={secondaryAction.onClick}>
+          <button 
+            type="button" 
+            className="mk-action-btn" 
+            onClick={secondaryAction.onClick}
+            disabled={loading}
+            aria-label={secondaryAction.label}
+          >
             {secondaryAction.label}
           </button>
         ) : null}

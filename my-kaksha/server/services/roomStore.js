@@ -540,16 +540,32 @@ export async function getWeeklyRoomSummary(roomId) {
   const mongo = await isMongoUsable();
   if (mongo) {
     const sessions = await RoomSession.find({ roomId, joinedAt: { $gte: start } }).lean();
+    // Use totalFocusMinutes (Pomodoro-tracked time) for trending instead of totalMinutes
+    const totalFocusMinutes = sessions.reduce((sum, s) => sum + (s.totalFocusMinutes || 0), 0);
     const totalMinutes = sessions.reduce((sum, s) => sum + (s.totalMinutes || 0), 0);
     const uniqueMembers = new Set(sessions.map((s) => s.userId)).size;
-    return { totalMinutes, memberCount: uniqueMembers, sessionsCount: sessions.length };
+    return { 
+      totalMinutes: totalFocusMinutes, // Return focus minutes as totalMinutes for trending
+      totalFocusMinutes,
+      totalRawMinutes: totalMinutes,
+      memberCount: uniqueMembers, 
+      sessionsCount: sessions.length 
+    };
   }
   const data = await readRoomSessionsFallback();
   const list = Array.isArray(data.sessions) ? data.sessions : [];
   const sessions = list.filter((s) => s.roomId === roomId && new Date(s.joinedAt) >= start);
+  // Use totalFocusMinutes for trending calculation
+  const totalFocusMinutes = sessions.reduce((sum, s) => sum + (s.totalFocusMinutes || 0), 0);
   const totalMinutes = sessions.reduce((sum, s) => sum + (s.totalMinutes || 0), 0);
   const uniqueMembers = new Set(sessions.map((s) => s.userId)).size;
-  return { totalMinutes, memberCount: uniqueMembers, sessionsCount: sessions.length };
+  return { 
+    totalMinutes: totalFocusMinutes, // Return focus minutes as totalMinutes for trending
+    totalFocusMinutes,
+    totalRawMinutes: totalMinutes,
+    memberCount: uniqueMembers, 
+    sessionsCount: sessions.length 
+  };
 }
 
 export async function getWeeklyUserSummary(userId) {

@@ -1,9 +1,11 @@
 // Authentication Controller
-// Handles signup, login, me, and logout
+// Handles signup, login, me, logout, and resetStats
 // Concept 5 (JWT) + Concept 6 (bcrypt) — Backend Engineering-I Eval-II
 
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
+import UserRoomStats from "../models/UserRoomStats.js";
+import RoomSession from "../models/RoomSession.js";
 import { ensureDatabaseConnection } from "../config/database.js";
 import { createSessionForUser, deleteSession } from "../services/sessionStore.js";
 import {
@@ -124,4 +126,40 @@ export async function logout(req, res) {
   res.clearCookie(AUTH_COOKIE_NAME, getClearCookieOptions());
   res.clearCookie(SESSION_COOKIE_NAME, getClearCookieOptions());
   res.status(200).json({ ok: true, message: "Logged out" });
+}
+
+export async function resetStats(req, res) {
+  const userId = req.auth.user.id;
+  
+  await ensureDatabaseConnection();
+  
+  // Reset all user room stats to zero (only focus time from actual Pomodoro sessions should count)
+  await UserRoomStats.updateMany(
+    { userId },
+    { 
+      $set: { 
+        totalFocusMinutes: 0, 
+        sessionsCompleted: 0, 
+        weeklyMinutes: 0, 
+        focusPoints: 0,
+        streakDays: 0
+      } 
+    }
+  );
+  
+  // Reset all room sessions to zero focus time
+  await RoomSession.updateMany(
+    { userId },
+    { 
+      $set: { 
+        totalFocusMinutes: 0, 
+        sessionsCompleted: 0 
+      } 
+    }
+  );
+  
+  res.status(200).json({ 
+    ok: true, 
+    message: "Study stats reset successfully. Only Pomodoro timer completions will count going forward." 
+  });
 }

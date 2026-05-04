@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { fetchStudyData, saveStudyData } from "./api/studyData";
+import { useAuth } from "./auth/useAuth";
 import AppSidebar from "./components/AppSidebar";
 import timerBg from "./components/download (13).jpg";
 import taskBg from "./components/taskbg.jpg";
@@ -16,6 +18,8 @@ const css = `
 
   .d-shell {
     min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     display: grid;
     grid-template-columns: 280px 1fr;
     background: radial-gradient(circle at top right, #f3e8da 0%, #faf8f3 42%);
@@ -23,90 +27,22 @@ const css = `
     font-family: 'Poppins', sans-serif;
   }
 
-  .d-shell.collapsed { grid-template-columns: 94px 1fr; }
-
-  .d-sidebar {
-    background: linear-gradient(180deg, #fffdf9, #f5efe6);
-    border-right: 1px solid #eed6c4;
-    padding: 24px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    min-height: 100vh;
-    position: sticky;
-    top: 0;
+  .d-shell.collapsed {
+    grid-template-columns: 94px 1fr;
   }
 
-  .d-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .d-brand { font-size: 1.2rem; font-weight: 800; color: #8b6f5e; white-space: nowrap; }
-  .d-brand span { color: #c8b6a6; }
-
-  .d-toggle {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
-    border: 1px solid #eed6c4;
-    background: #faf8f3;
-    color: #8b6f5e;
-    cursor: pointer;
-    font-weight: 700;
+  .d-main {
+    padding: 28px 32px 40px;
+    height: 100vh;
+    overflow-y: auto;
+    min-width: 0;
   }
 
-  .d-nav { display: grid; gap: 8px; }
-  .d-nav-btn {
-    border: 1px solid transparent;
-    background: transparent;
-    color: #8b6f5e;
-    padding: 12px;
-    border-radius: 12px;
-    text-align: left;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-family: inherit;
-    font-weight: 600;
-    cursor: pointer;
+  @media (max-width: 780px) {
+    .d-shell, .d-shell.collapsed { 
+      grid-template-columns: 1fr; 
+    }
   }
-  .d-nav-btn:hover { background: #f5efe6; border-color: #eed6c4; }
-  .d-nav-btn.active {
-    background: linear-gradient(135deg, #eed6c4, #dac1ad);
-    border-color: #c8b6a6;
-    color: #4a3728;
-  }
-  .d-dot { width: 8px; height: 8px; border-radius: 50%; background: #c8b6a6; flex-shrink: 0; }
-
-  .d-shell.collapsed .d-brand,
-  .d-shell.collapsed .d-label,
-  .d-shell.collapsed .d-note,
-  .d-shell.collapsed .d-back-btn { display: none; }
-  .d-shell.collapsed .d-nav-btn { justify-content: center; }
-
-  .d-note {
-    margin-top: auto;
-    border: 1px solid #eed6c4;
-    background: #faf8f3;
-    border-radius: 14px;
-    padding: 10px;
-    color: #8b6f5e;
-    font-size: 0.76rem;
-    line-height: 1.5;
-  }
-
-  .d-back-btn {
-    width: 100%;
-    border-radius: 999px;
-    border: 1px solid #eed6c4;
-    background: #f5efe6;
-    color: #8b6f5e;
-    font-family: inherit;
-    font-weight: 600;
-    padding: 10px 14px;
-    cursor: pointer;
-  }
-  .d-back-btn:hover { background: #fffdf9; }
-
-  .d-main { padding: 26px; }
-  .d-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
   .d-title { margin: 0; font-size: clamp(1.4rem, 2.2vw, 2rem); color: #4a3728; }
   .d-sub { margin: 5px 0 0; color: #8b6f5e; font-size: 0.9rem; }
   .d-day {
@@ -227,6 +163,12 @@ const css = `
   }
   .d-btn.primary { background: linear-gradient(135deg, #c8b6a6, #8b6f5e); color: #fff; }
   .d-btn.soft { border: 1px solid #eed6c4; background: #f5efe6; color: #8b6f5e; }
+  .d-btn:disabled { 
+    opacity: 0.5; 
+    cursor: not-allowed; 
+    transform: none !important;
+    box-shadow: none !important;
+  }
 
   .d-settings {
     width: min(220px, 100%);
@@ -445,6 +387,18 @@ const css = `
     font-size: 0.86rem;
     font-weight: 700;
     cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .d-tracker-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+  
+  .d-tracker-btn:not(:disabled):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 
   @media (max-width: 980px) {
@@ -455,19 +409,7 @@ const css = `
     .d-productivity-grid { grid-template-columns: 1fr; }
   }
 
-  @media (max-width: 780px) {
-    .d-shell, .d-shell.collapsed { grid-template-columns: 1fr; }
-    .d-sidebar {
-      min-height: auto;
-      position: static;
-      border-right: none;
-      border-bottom: 1px solid #eed6c4;
-    }
-    .d-shell.collapsed .d-brand,
-    .d-shell.collapsed .d-label,
-    .d-shell.collapsed .d-note { display: inline; }
-    .d-shell.collapsed .d-nav-btn { justify-content: flex-start; }
-  }
+  .d-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
 `;
 
 const trackerData = {
@@ -618,6 +560,8 @@ function loadProjectsSnapshot() {
 }
 
 export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStudyGroup, onGoToProjects }) {
+  const navigate = useNavigate();
+  const { signOut, user } = useAuth();
   const [collapsed, setCollapsed] = useSidebarState();
   const [activeNav, setActiveNav] = useState("Dashboard");
 
@@ -933,6 +877,14 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
             }
           }}
           primaryAction={{ label: "Back to Home", onClick: () => onBackToLanding?.() }}
+          secondaryAction={{
+            label: "Sign Out",
+            onClick: async () => {
+              await signOut();
+              navigate("/login", { replace: true });
+            },
+          }}
+          noteTitle={`Signed in as ${user?.name || "Student"}`}
           noteText="Set a goal, load it into the timer, and your study sessions auto-record for analytics."
           navAriaLabel="Dashboard navigation"
         />
@@ -970,10 +922,22 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
                   <span className="d-pill">{mode === "focus" ? "Focus Time" : "Break Time"}</span>
                   <div className="d-time">{formatTime(secondsLeft)}</div>
                   <div className="d-actions">
-                    <button className="d-btn primary" onClick={() => setRunning((x) => !x)}>
+                    <button 
+                      className="d-btn primary" 
+                      onClick={() => setRunning((x) => !x)}
+                      disabled={!dataReady}
+                      aria-label={running ? "Pause timer" : "Start timer"}
+                    >
                       {running ? "Pause" : "Start"}
                     </button>
-                    <button className="d-btn soft" onClick={resetTimer}>Reset</button>
+                    <button 
+                      className="d-btn soft" 
+                      onClick={resetTimer}
+                      disabled={!dataReady}
+                      aria-label="Reset timer"
+                    >
+                      Reset
+                    </button>
                     <button
                       className="d-btn soft"
                       onClick={() => {
@@ -987,6 +951,8 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
                         setSecondsLeft((next === "focus" ? focusMinutes : breakMinutes) * 60);
                         setRunning(false);
                       }}
+                      disabled={!dataReady}
+                      aria-label={`Switch to ${mode === "focus" ? "break" : "focus"} mode`}
                     >
                       Switch
                     </button>
@@ -1065,8 +1031,16 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
                     onKeyDown={(e) => {
                       if (e.key === "Enter") addTask();
                     }}
+                    disabled={!dataReady}
                   />
-                  <button className="d-btn primary" onClick={addTask}>Add</button>
+                  <button 
+                    className="d-btn primary" 
+                    onClick={addTask}
+                    disabled={!dataReady || !taskText.trim()}
+                    aria-label="Add new task"
+                  >
+                    Add
+                  </button>
                 </div>
               </div>
 
@@ -1098,6 +1072,7 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
                   value={goalTitle}
                   placeholder="Goal title (ex: Physics revision)"
                   onChange={(e) => setGoalTitle(e.target.value)}
+                  disabled={!dataReady}
                 />
                 <input
                   type="number"
@@ -1105,8 +1080,16 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
                   max="180"
                   value={goalMinutes}
                   onChange={(e) => setGoalMinutes(Math.max(1, Number(e.target.value) || 1))}
+                  disabled={!dataReady}
                 />
-                <button className="d-btn primary" onClick={addGoal}>Add Goal</button>
+                <button 
+                  className="d-btn primary" 
+                  onClick={addGoal}
+                  disabled={!dataReady || !goalTitle.trim()}
+                  aria-label="Add new goal"
+                >
+                  Add Goal
+                </button>
               </div>
 
               <ul className="d-goal-list">
@@ -1131,7 +1114,14 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
                           </div>
                         </div>
                         <div className="d-goal-actions">
-                          <button className="d-btn soft" onClick={() => useGoalInTimer(goal)}>Use in Timer</button>
+                          <button 
+                            className="d-btn soft" 
+                            onClick={() => useGoalInTimer(goal)}
+                            disabled={!dataReady}
+                            aria-label={`Use ${goal.title} in timer`}
+                          >
+                            Use in Timer
+                          </button>
                           {goal.id === activeGoalId ? <span className="d-pill">Active</span> : null}
                         </div>
                       </li>
@@ -1190,8 +1180,10 @@ export default function Dashboard({ onBackToLanding, onGoToAnalytics, onGoToStud
                         className="d-tracker-btn"
                         style={{ background: theme.button, color: theme.buttonText }}
                         onClick={handleAction}
+                        disabled={!dataReady}
+                        aria-label={`${card.buttonLabel} for ${title}`}
                       >
-                        {card.buttonLabel}
+                        {!dataReady ? "Loading..." : card.buttonLabel}
                       </button>
                     </article>
                   );

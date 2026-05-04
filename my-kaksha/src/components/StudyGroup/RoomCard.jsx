@@ -25,7 +25,7 @@ function formatWeeklyProgress(room) {
   return { pct, text: `${Math.round(weeklyMinutes / 60)}h / ${goal}h weekly` };
 }
 
-export default function RoomCard({ room, onJoin }) {
+export default function RoomCard({ room, onJoin, isMember = false }) {
   const accent = getAccent(room.name);
   const preview = Array.isArray(room.memberPreview) ? room.memberPreview : [];
   const progress = formatWeeklyProgress(room);
@@ -86,7 +86,7 @@ export default function RoomCard({ room, onJoin }) {
         style={{ width: "100%", marginTop: 12, background: accent.button }}
         onClick={() => onJoin(room.id)}
       >
-        Join Room
+        {isMember ? "Enter Room" : "Join Room"}
       </button>
     </article>
   );

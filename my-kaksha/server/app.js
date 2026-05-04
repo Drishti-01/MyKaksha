@@ -18,6 +18,7 @@ import { asyncHandler } from "./utils/asyncHandler.js";
 import { login, signup } from "./controllers/authController.js";
 import { validateLogin, validateSignup } from "./middleware/validation.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandlers.js";
+import { apiLimiter, authLimiter } from "./middleware/rateLimiter.js";
 
 export function createApp({ io } = {}) {
   const app = express();
@@ -78,6 +79,9 @@ export function createApp({ io } = {}) {
     next();
   });
 
+  // Rate limiting for API endpoints
+  app.use("/api", apiLimiter);
+
   if (io) {
     app.use((req, _res, next) => {
       req.io = io;
@@ -91,8 +95,8 @@ export function createApp({ io } = {}) {
   });
 
   // Auth routes mounted directly (legacy paths kept for compatibility)
-  app.post("/signup", validateSignup, asyncHandler(signup));
-  app.post("/login", validateLogin, asyncHandler(login));
+  app.post("/signup", authLimiter, validateSignup, asyncHandler(signup));
+  app.post("/login", authLimiter, validateLogin, asyncHandler(login));
 
   // REST API routes — each resource has its own router
   // GET=read, POST=create, PUT=update, DELETE=remove

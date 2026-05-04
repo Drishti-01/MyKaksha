@@ -5,6 +5,14 @@ function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function sanitizeText(text) {
+  if (typeof text !== "string") return "";
+  return text
+    .trim()
+    .replace(/[<>]/g, "") // Remove potential HTML tags
+    .slice(0, 1000); // Limit length
+}
+
 function normalizeProjectPayload(payload = {}) {
   const technologies = Array.isArray(payload.technologies)
     ? payload.technologies
@@ -99,5 +107,42 @@ export function validateProjectStatusPatch(req, _res, next) {
   }
 
   req.validatedProjectStatus = status;
+  next();
+}
+
+export function validateChatMessage(req, _res, next) {
+  const content = sanitizeText(req.body?.content || req.body?.text || "");
+  
+  if (!content || content.length === 0) {
+    next(createHttpError(400, "Message content is required"));
+    return;
+  }
+
+  if (content.length > 500) {
+    next(createHttpError(400, "Message too long (max 500 characters)"));
+    return;
+  }
+
+  req.validatedMessage = { content };
+  next();
+}
+
+export function validateRoomCreation(req, _res, next) {
+  const name = sanitizeText(req.body?.name || "");
+  const type = req.body?.type === "private" ? "private" : "public";
+  const focusStyle = req.body?.focusStyle === "silent" ? "silent" : "discussion";
+  const weeklyGoalHours = Math.max(0, Math.min(168, Number(req.body?.weeklyGoalHours) || 0));
+
+  if (!name || name.length < 3) {
+    next(createHttpError(400, "Room name must be at least 3 characters"));
+    return;
+  }
+
+  if (name.length > 50) {
+    next(createHttpError(400, "Room name too long (max 50 characters)"));
+    return;
+  }
+
+  req.validatedRoom = { name, type, focusStyle, weeklyGoalHours };
   next();
 }

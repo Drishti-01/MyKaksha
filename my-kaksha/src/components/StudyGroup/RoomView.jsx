@@ -249,9 +249,11 @@ export default function RoomView() {
     return () => {
       joinSentRef.current = false;
       socket.disconnect();
-      leaveRoom().catch(() => {});
+      // DO NOT call leaveRoom() here — user is just closing tab, not leaving the room
+      // Members should persist in MongoDB until they explicitly click "Leave Room"
+      // The socket disconnect event on server will handle presence cleanup only
     };
-  }, [roomId, privacyPayload, leaveRoom, setRoomStatsRows, setMyStats, room?.name, userId, displayName]);
+  }, [roomId, privacyPayload, setRoomStatsRows, setMyStats, room?.name, userId, displayName]);
 
   useEffect(() => {
     if (tab === "chat") {
@@ -325,6 +327,15 @@ export default function RoomView() {
       <div className="sg2-topbar sg2-room-topbar">
         <div>
           <div className="sg2-inline-row" style={{ gap: 8 }}>
+            <button 
+              type="button" 
+              className="sg2-btn secondary" 
+              style={{ padding: "6px 12px", fontSize: "0.85rem", marginRight: 8 }}
+              onClick={() => navigate("/study-group")}
+              title="Back to lobby"
+            >
+              ← Back
+            </button>
             <span className="sg2-room-dot" style={{ background: accent }} />
             <h1 className="sg2-title" style={{ fontSize: "1.45rem" }}>{room.name}</h1>
           </div>

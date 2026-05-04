@@ -73,6 +73,7 @@ function toLobbyRoom(room) {
     focusStyle: room.focusStyle,
     code: room.code,
     memberCount: (room.members || []).length,
+    members: room.members || [],
     onlineCount,
     status: roomStatus(room, onlineCount),
     activityScore: room.activityScore ?? 0,
@@ -82,6 +83,22 @@ function toLobbyRoom(room) {
     createdAt: room.createdAt,
     lastActiveAt: room.lastActiveAt,
   };
+}
+
+// Cache for trending results to avoid N+1 queries
+const trendingCache = new Map();
+const TRENDING_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCachedTrending(key) {
+  const cached = trendingCache.get(key);
+  if (cached && Date.now() - cached.timestamp < TRENDING_CACHE_TTL) {
+    return cached.data;
+  }
+  return null;
+}
+
+function setCachedTrending(key, data) {
+  trendingCache.set(key, { data, timestamp: Date.now() });
 }
 
 export async function listRooms(req, res) {
@@ -94,19 +111,28 @@ export async function listRooms(req, res) {
 
   const roomRows = visible.map(toLobbyRoom);
 
-  const trendingRaw = await Promise.all(roomRows.map(async (room) => {
-    const summary = await getWeeklyRoomSummary(room.id);
-    return {
-      ...room,
-      weeklyMinutes: summary.totalMinutes,
-      weeklyHours: Math.round((summary.totalMinutes / 60) * 10) / 10,
-      weeklyMembers: summary.memberCount,
-    };
-  }));
+  // Check cache first for trending data
+  const cacheKey = `trending_${new Date().toISOString().slice(0, 10)}`;
+  let trending = getCachedTrending(cacheKey);
+  
+  if (!trending) {
+    const trendingRaw = await Promise.all(roomRows.map(async (room) => {
+      const summary = await getWeeklyRoomSummary(room.id);
+      return {
+        ...room,
+        weeklyMinutes: summary.totalMinutes,
+        weeklyHours: Math.round((summary.totalMinutes / 60) * 10) / 10,
+        weeklyMembers: summary.memberCount,
+      };
+    }));
 
-  const trending = trendingRaw
-    .sort((a, b) => (b.weeklyMinutes || 0) - (a.weeklyMinutes || 0))
-    .slice(0, 3);
+    trending = trendingRaw
+      .filter((room) => (room.weeklyMinutes || 0) > 0) // Only show rooms with actual activity
+      .sort((a, b) => (b.weeklyMinutes || 0) - (a.weeklyMinutes || 0))
+      .slice(0, 3);
+      
+    setCachedTrending(cacheKey, trending);
+  }
 
   const myRooms = roomRows
     .filter((r) => visible.find((x) => x.id === r.id)?.members?.some((m) => m.userId === req.auth.user.id))
@@ -410,14 +436,6 @@ export async function trackSessionComplete(req, res) {
     userId: String(userId),
     name: userName,
     sessionNumber: Number(session.sessionsCompleted || deltaSessions || 1),
-  });
-
-  req.app.get("io")?.to(roomId).emit("study-time-update", {
-    roomId,
-    userId: String(userId),
-    name: userName,
-    todayMinutes: Number(session.totalFocusMinutes || 0),
-    sessionsToday: Number(session.sessionsCompleted || 0),
   });
 
   const roomStats = await getRoomStats(roomId);
