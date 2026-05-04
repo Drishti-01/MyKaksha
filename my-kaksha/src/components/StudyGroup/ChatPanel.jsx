@@ -99,7 +99,7 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
       const msg = normalizeIncoming(incoming);
       // Always reset sending state when we get any message from ourselves
       // Do this BEFORE dedup check so it always fires
-      if ((msg.sender?.userId || "") === String(meUserId)) {
+      if (String(msg.sender?.userId || "") === String(meUserId || "")) {
         setSending(false);
         setText("");
         // Clear the safety timeout
@@ -109,7 +109,7 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
         }
       }
       setMessages((prev) => upsertIncoming(prev, msg));
-      if (!isActiveTab && (msg.sender?.userId || "") !== String(meUserId)) {
+      if (!isActiveTab && String(msg.sender?.userId || "") !== String(meUserId || "")) {
         onUnreadChange?.((v) => (v || 0) + 1);
       }
     };
@@ -285,7 +285,7 @@ export default function ChatPanel({ roomId, socketRef, meUserId, meName, chatPau
         ) : null}
 
         {messages.map((msg) => {
-          const isMine = msg.sender.userId === meUserId;
+          const isMine = String(msg.sender?.userId || "") === String(meUserId || "");
           const isSystem = msg.type === "system";
           if (isSystem) {
             return (

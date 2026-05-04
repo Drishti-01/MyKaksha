@@ -161,6 +161,8 @@ io.on("connection", (socket) => {
       if (socket.data.joinedRoomId === roomId) {
         console.log(`[socket] join-room: already joined, skipping duplicate for userId=${userId}`);
         socket.emit("room-joined", { roomId, userId, success: true });
+        // Still broadcast — a prior join may have failed after presence was set but before broadcast ran
+        broadcastPresence(roomId);
         return;
       }
 
@@ -192,6 +194,9 @@ io.on("connection", (socket) => {
         showFocus: privacy.showFocus !== false,
         appearInLeaderboard: privacy.appearInLeaderboard !== false,
       });
+
+      // Notify everyone immediately — do not wait on DB; a slow/failed session write must not hide the member
+      broadcastPresence(roomId);
 
   // Add user to Room.members in MongoDB
   // Strategy: use findByIdAndUpdate with $push + $ne filter on the array element
@@ -227,7 +232,6 @@ io.on("connection", (socket) => {
       });
 
       socket.emit("room-joined", { roomId, userId, success: true });
-      broadcastPresence(roomId);
       emitLobbyCount();
 
       const history = await readRecentChatMessages(roomId, 50);

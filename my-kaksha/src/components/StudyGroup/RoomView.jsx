@@ -24,6 +24,37 @@ function dedupeByUserId(rows) {
   });
 }
 
+/** Socket presence can miss updates if the server broadcast was delayed; MongoDB `room.members` is the source of roster truth. */
+function mergeRoomMembersWithPresence(socketRows, roomMemberRows, viewerUserId) {
+  const byId = new Map();
+  for (const m of dedupeByUserId(socketRows || [])) {
+    const id = String(m.userId || "");
+    if (!id) continue;
+    byId.set(id, { ...m, userId: id });
+  }
+  const vid = String(viewerUserId || "");
+  for (const m of roomMemberRows || []) {
+    const id = String(m.userId ?? "");
+    if (!id) continue;
+    if (!byId.has(id)) {
+      byId.set(id, {
+        userId: id,
+        name: (m.name && String(m.name).trim()) || "Member",
+        status: "offline",
+        appearInLeaderboard: true,
+        isSelf: id === vid,
+      });
+    } else {
+      const cur = byId.get(id);
+      const nm = (m.name && String(m.name).trim()) || "";
+      if (nm && (!cur.name || String(cur.name).trim() === "" || cur.name === "Student")) {
+        byId.set(id, { ...cur, name: nm });
+      }
+    }
+  }
+  return [...byId.values()];
+}
+
 function stripCounts(members) {
   let focusing = 0;
   let onBreak = 0;
@@ -84,12 +115,18 @@ export default function RoomView() {
     loading,
     error,
     leaveRoom,
+    reload,
     setRoomStatsRows,
     setMyStats,
   } = useRoom(roomId);
 
   const statsByUser = useMemo(() => toStatsMap(dedupeByUserId(studyTimes)), [studyTimes]);
   const roomStatsByUser = useMemo(() => toStatsMap(dedupeByUserId(roomStats)), [roomStats]);
+
+  const mergedMembers = useMemo(
+    () => mergeRoomMembersWithPresence(members, room?.members, userId),
+    [members, room?.members, userId]
+  );
 
   const todayMinutesForMe = Number(statsByUser[userId]?.totalFocusMinutes || 0);
 
@@ -244,16 +281,24 @@ export default function RoomView() {
       if (mine) setMyStats(mine);
     });
 
+    const onRoomRosterHint = () => {
+      reload({ silent: true });
+    };
+    socket.on("user-joined-room", onRoomRosterHint);
+    socket.on("user-left-room", onRoomRosterHint);
+
     if (socket.connected) emitJoin();
 
     return () => {
       joinSentRef.current = false;
+      socket.off("user-joined-room", onRoomRosterHint);
+      socket.off("user-left-room", onRoomRosterHint);
       socket.disconnect();
       // DO NOT call leaveRoom() here — user is just closing tab, not leaving the room
       // Members should persist in MongoDB until they explicitly click "Leave Room"
       // The socket disconnect event on server will handle presence cleanup only
     };
-  }, [roomId, privacyPayload, setRoomStatsRows, setMyStats, room?.name, userId, displayName]);
+  }, [roomId, privacyPayload, reload, setRoomStatsRows, setMyStats, room?.name, userId, displayName]);
 
   useEffect(() => {
     if (tab === "chat") {
@@ -262,7 +307,7 @@ export default function RoomView() {
   }, [tab]);
 
   const membersStudyRows = useMemo(() => {
-    const enriched = dedupeByUserId(members).map((m) => {
+    const enriched = dedupeByUserId(mergedMembers).map((m) => {
       const s = statsByUser[m.userId] || {};
       return {
         ...m,
@@ -271,7 +316,7 @@ export default function RoomView() {
     });
     const max = Math.max(1, ...enriched.map((e) => e.todayMinutes || 0));
     return { rows: enriched.sort((a, b) => (b.todayMinutes || 0) - (a.todayMinutes || 0)), max };
-  }, [members, statsByUser]);
+  }, [mergedMembers, statsByUser]);
 
   const chatPaused = room?.focusStyle === "silent" && timer.phase === "focus" && timer.running;
 
@@ -302,7 +347,7 @@ export default function RoomView() {
   );
 
   const accent = roomAccent(room.name);
-  const visibleMembers = dedupeByUserId(members);
+  const visibleMembers = dedupeByUserId(mergedMembers);
   const presenceCounts = stripCounts(visibleMembers);
   const leaderboardRows = weeklyLeaderboard.length > 0
     ? weeklyLeaderboard.map((row) => ({
