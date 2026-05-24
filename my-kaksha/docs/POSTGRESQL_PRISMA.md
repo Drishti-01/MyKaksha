@@ -13,6 +13,16 @@ Users bookmark study links (videos, articles, docs) at `/resources`.
 | ORM | Prisma |
 | Database | PostgreSQL |
 
+## Render deploy
+
+**Build command** (do not run `prisma migrate deploy` here — use start instead):
+
+```bash
+NPM_CONFIG_PRODUCTION=false npm install && npm run build
+```
+
+**Start command:** `npm start` (runs `prisma migrate deploy` then the server).
+
 ## Troubleshooting
 
 ### P1001 — `Can't reach database server at localhost:51214`
