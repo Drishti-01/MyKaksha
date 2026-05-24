@@ -784,7 +784,7 @@ function AnimatedStat({ value }) {
   return shown;
 }
 
-const navItems = ["Dashboard", "Analytics", "Projects", "Study Group"];
+const navItems = ["Dashboard", "Analytics", "Projects", "Resources", "Study Group"];
 
 export default function Analytics() {
   const navigate = useNavigate();
@@ -940,6 +940,10 @@ export default function Analytics() {
     }
     if (item === "Projects") {
       navigate("/projects");
+      return;
+    }
+    if (item === "Resources") {
+      navigate("/resources");
       return;
     }
     if (item === "Study Group") {

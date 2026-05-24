@@ -1,6 +1,3 @@
-// Authentication Controller
-// Handles signup, login, me, logout, and resetStats
-// Concept 5 (JWT) + Concept 6 (bcrypt) — Backend Engineering-I Eval-II
 
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";

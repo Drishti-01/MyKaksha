@@ -4,6 +4,8 @@
 // Stateless: each request contains all needed information
 
 import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import cors from "cors";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
@@ -14,11 +16,15 @@ import projectRoutes from "./routes/projectRoutes.js";
 import roomRoutes from "./routes/roomRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 import demoRoutes from "./routes/demoRoutes.js";
+import studyResourceRoutes from "./routes/studyResourceRoutes.js";
 import { asyncHandler } from "./utils/asyncHandler.js";
 import { login, signup } from "./controllers/authController.js";
 import { validateLogin, validateSignup } from "./middleware/validation.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandlers.js";
 import { apiLimiter, authLimiter } from "./middleware/rateLimiter.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const distPath = path.resolve(__dirname, "../dist");
 
 export function createApp({ io } = {}) {
   const app = express();
@@ -94,6 +100,24 @@ export function createApp({ io } = {}) {
 
   app.use("/api/demo", demoRoutes);
 
+  // Study Resources — PostgreSQL + Prisma (isolated; MongoDB unchanged)
+  app.use("/api/study-resources", studyResourceRoutes);
+
+  // Production: serve Vite build (same origin as API + Socket.io)
+  if (process.env.NODE_ENV === "production") {
+    app.use(express.static(distPath));
+    app.get(/^(?!\/api|\/socket\.io).*/, (req, res, next) => {
+      if (req.method !== "GET") {
+        next();
+        return;
+      }
+      res.sendFile(path.join(distPath, "index.html"), (err) => {
+        if (err) next(err);
+      });
+    });
+  }
+
+  // 404 handler — catches any route not matched above
   app.use(notFoundHandler);
 
 

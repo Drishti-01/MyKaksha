@@ -9,6 +9,7 @@ A real-time collaborative study platform built with React, Node.js, Socket.io, a
 - 💬 **Live Chat**: Real-time messaging with typing indicators
 - 📊 **Analytics**: Visual progress tracking and study insights
 - 📋 **Project Tracker**: Manage and track your projects
+- 🔖 **Study Resources**: Bookmark study links (PostgreSQL + Prisma — optional, separate from MongoDB)
 - 🔥 **Trending Rooms**: Discover active study communities
 - 📱 **Responsive Design**: Works on all devices
 - 🔒 **Secure**: JWT authentication with rate limiting
@@ -43,6 +44,12 @@ A real-time collaborative study platform built with React, Node.js, Socket.io, a
    JWT_EXPIRES_IN=7d
    SESSION_SECRET=your_session_secret
    ```
+
+   Optional — Study Resources (PostgreSQL + Prisma only):
+   ```env
+   DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/mykaksha_resources?sslmode=require
+   ```
+   Then run `npx prisma migrate dev`. See [docs/POSTGRESQL_PRISMA.md](docs/POSTGRESQL_PRISMA.md).
 
 4. **Start the application**
    ```bash
@@ -200,6 +207,7 @@ npm run server       # Start production server
 - **Async programming** with fetch, fs/promises, Mongoose, bcrypt, JWT, and Socket.io
 - **Real-time communication** with Socket.io for chat, presence, and timer sync
 - **Database integration** with MongoDB + Mongoose and JSON fallback
+- **PostgreSQL + Prisma** for the isolated Study Resources feature (see `docs/POSTGRESQL_PRISMA.md`)
 - **Authentication** with JWT + HttpOnly cookies + session tracking
 - **Protected routes** on both backend and frontend
 - **Modular backend structure** with routes, controllers, services, middleware, and models

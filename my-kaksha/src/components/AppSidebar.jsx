@@ -24,6 +24,13 @@ const SIDEBAR_ICONS = {
       <path d="M8.2 7.8V5.9a1.8 1.8 0 0 1 1.8-1.8H14a1.8 1.8 0 0 1 1.8 1.8v1.9" />
     </svg>
   ),
+  Resources: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M4 6.5h16v12a1.8 1.8 0 0 1-1.8 1.8H5.8A1.8 1.8 0 0 1 4 18.5z" />
+      <path d="M8 6.5V4.7A1.8 1.8 0 0 1 9.8 2.9h4.4a1.8 1.8 0 0 1 1.8 1.8v1.8" />
+      <path d="M9 11.5h6M9 15h4" />
+    </svg>
+  ),
   "Study Group": (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
       <circle cx="8" cy="9" r="2.6" />

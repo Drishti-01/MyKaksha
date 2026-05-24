@@ -303,7 +303,7 @@ export default function ProjectTracker() {
     completed: projects.filter((project) => project.status === "Completed").length,
     inProgress: projects.filter((project) => project.status === "In Progress").length,
   };
-  const navItems = ["Dashboard", "Analytics", "Projects", "Study Group"];
+  const navItems = ["Dashboard", "Analytics", "Projects", "Resources", "Study Group"];
 
   function handleNav(item) {
     if (item === "Projects") return;
@@ -313,6 +313,10 @@ export default function ProjectTracker() {
     }
     if (item === "Analytics") {
       navigate("/analytics");
+      return;
+    }
+    if (item === "Resources") {
+      navigate("/resources");
       return;
     }
     if (item === "Study Group") {

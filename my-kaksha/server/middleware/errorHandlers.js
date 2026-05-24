@@ -32,9 +32,11 @@ export function errorHandler(error, _req, res, next) {
         ? 400
         : error?.name === "JsonWebTokenError" || error?.name === "TokenExpiredError"
           ? 401
-          : error?.code === 11000
+          : error?.code === 11000 || error?.code === "P2002"
             ? 409
-            : 500;
+            : error?.code === "P2025"
+              ? 404
+              : 500;
 
   const message =
     status >= 500
