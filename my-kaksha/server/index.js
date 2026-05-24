@@ -1,10 +1,4 @@
-﻿// Socket.io — Full Duplex Real-time Communication
-// HTTP is one-directional: client requests, server responds
-// WebSocket/Socket.io is bidirectional: both can initiate
-// Used here for: live chat, presence, timer sync, study updates
-// Each socket event is like an HTTP route but for real-time data
-// Concept 8 — Socket.io (Backend Engineering-I Eval-II)
-
+﻿
 import http from "node:http";
 import { Server } from "socket.io";
 import "dotenv/config";
@@ -158,12 +152,11 @@ io.on("connection", (socket) => {
 
       console.log(`[socket] join-room: userId=${userId} roomId=${roomId} (prev joinedRoomId=${socket.data.joinedRoomId})`);
 
-      // Allow re-join if socket reconnected (joinedRoomId may be stale from previous connection)
-      // Only skip if this exact socket already joined this exact room in this session
+
       if (socket.data.joinedRoomId === roomId) {
         console.log(`[socket] join-room: already joined, skipping duplicate for userId=${userId}`);
         socket.emit("room-joined", { roomId, userId, success: true });
-        // Still broadcast — a prior join may have failed after presence was set but before broadcast ran
+
         broadcastPresence(roomId);
         return;
       }
@@ -198,15 +191,11 @@ io.on("connection", (socket) => {
         appearInLeaderboard: privacy.appearInLeaderboard !== false,
       });
 
-      // Notify everyone immediately — do not wait on DB; a slow/failed session write must not hide the member
       broadcastPresence(roomId);
       void emitRoomPresenceUpdate(roomId);
 
-  // Add user to Room.members in MongoDB
-  // Strategy: use findByIdAndUpdate with $push + $ne filter on the array element
-  // This is the most reliable approach across all MongoDB versions
   try {
-    // First check if already a member to avoid duplicate push
+
     const existing = await Room.findOne({ _id: roomId, "members.userId": userId }).lean();
     if (!existing) {
       const updateResult = await Room.findByIdAndUpdate(
@@ -267,9 +256,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("study-time-update", async (payload = {}) => {
-    // DEPRECATED: This event should not be used to update database stats
-    // Only session-complete should increment actual study time
-    // This event is kept for backward compatibility but does nothing
+
     console.log("[socket] study-time-update: deprecated event ignored, use session-complete instead");
   });
 
@@ -387,7 +374,6 @@ io.on("connection", (socket) => {
     const content = typeof payload.content === "string" ? payload.content : "";
     if (!roomId) return;
 
-    // Persist shared notes to Room document in MongoDB
     try {
       await Room.findByIdAndUpdate(
         roomId,
@@ -397,7 +383,6 @@ io.on("connection", (socket) => {
       console.warn("[notes-sync] MongoDB save failed:", err?.message || err);
     }
 
-    // Broadcast updated notes to all other clients in the room
     socket.to(roomId).emit("notes-sync", {
       roomId,
       content,
