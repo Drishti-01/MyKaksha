@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchStudyData, saveStudyData } from "./api/studyData";
 import AppSidebar from "./components/AppSidebar";
 import timerBg from "./components/download (13).jpg";
-import taskBg from "./components/taskbg.jpg";
+import taskBg from "./components/Taskbg.jpg";
 import goalsBg from "./components/Stripe.jpg";
 import useSidebarState from "./components/useSidebarState";
 
