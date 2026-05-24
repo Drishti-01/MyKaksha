@@ -15,7 +15,12 @@
     "test:ui": "vitest --ui",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "postinstall": "prisma generate",
+    "start": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=20 <23"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",

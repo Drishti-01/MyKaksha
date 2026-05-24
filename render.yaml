@@ -1,0 +1,15 @@
+# Render Blueprint — app code lives in my-kaksha/ (not repo root)
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: my-kaksha
+    runtime: node
+    rootDir: my-kaksha
+    buildCommand: npm install && npx prisma generate && npm run build && npx prisma migrate deploy
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Set these in the Render dashboard (Secrets):
+      # MONGODB_URI, MONGODB_DB, DATABASE_URL, JWT_SECRET, JWT_EXPIRES_IN, SESSION_SECRET
