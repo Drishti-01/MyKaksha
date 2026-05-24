@@ -1,4 +1,4 @@
-﻿// REST API — Representational State Transfer
+// REST API — Representational State Transfer
 // Uses HTTP methods to define operation type
 // GET=read, POST=create, PUT=update, DELETE=remove
 // Stateless: each request contains all needed information
@@ -14,6 +14,7 @@ import projectRoutes from "./routes/projectRoutes.js";
 import roomRoutes from "./routes/roomRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 import demoRoutes from "./routes/demoRoutes.js";
+import studyResourceRoutes from "./routes/studyResourceRoutes.js";
 import { asyncHandler } from "./utils/asyncHandler.js";
 import { login, signup } from "./controllers/authController.js";
 import { validateLogin, validateSignup } from "./middleware/validation.js";
@@ -108,6 +109,9 @@ export function createApp({ io } = {}) {
 
   // Demo routes — shows blocking vs non-blocking I/O for evaluation
   app.use("/api/demo", demoRoutes);
+
+  // Study Resources — PostgreSQL + Prisma (isolated; MongoDB unchanged)
+  app.use("/api/study-resources", studyResourceRoutes);
 
   // 404 handler — catches any route not matched above
   app.use(notFoundHandler);

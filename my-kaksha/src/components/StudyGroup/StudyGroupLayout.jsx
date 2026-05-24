@@ -4,7 +4,7 @@ import AppSidebar from "../AppSidebar";
 import useSidebarState from "../useSidebarState";
 import "./study-group.css";
 
-const navItems = ["Dashboard", "Analytics", "Projects", "Study Group"];
+const navItems = ["Dashboard", "Analytics", "Projects", "Resources", "Study Group"];
 
 /**
  * Shell for /study-group/* — sidebar + outlet (RoomLobby or RoomView).
@@ -30,6 +30,10 @@ export default function StudyGroupLayout() {
     }
     if (item === "Projects") {
       navigate("/projects");
+      return;
+    }
+    if (item === "Resources") {
+      navigate("/resources");
     }
   }
 

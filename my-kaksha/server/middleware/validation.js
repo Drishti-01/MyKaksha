@@ -146,3 +146,44 @@ export function validateRoomCreation(req, _res, next) {
   req.validatedRoom = { name, type, focusStyle, weeklyGoalHours };
   next();
 }
+
+function normalizeStudyResourcePayload(payload = {}) {
+  return {
+    title: String(payload.title || "").trim(),
+    url: String(payload.url || "").trim(),
+    notes: String(payload.notes || "").trim(),
+    categoryId: String(payload.categoryId || "").trim(),
+  };
+}
+
+export function validateStudyResourcePayload(req, _res, next) {
+  const resource = normalizeStudyResourcePayload(req.body ?? {});
+
+  if (!isNonEmptyString(resource.title)) {
+    next(createHttpError(400, "Resource title is required"));
+    return;
+  }
+
+  if (!isNonEmptyString(resource.url)) {
+    next(createHttpError(400, "Resource URL is required"));
+    return;
+  }
+
+  if (!resource.url.startsWith("http://") && !resource.url.startsWith("https://")) {
+    next(createHttpError(400, "Resource URL must start with http:// or https://"));
+    return;
+  }
+
+  if (!isNonEmptyString(resource.categoryId)) {
+    next(createHttpError(400, "Category is required"));
+    return;
+  }
+
+  req.validatedStudyResource = {
+    title: resource.title.slice(0, 200),
+    url: resource.url.slice(0, 500),
+    notes: resource.notes ? resource.notes.slice(0, 1000) : "",
+    categoryId: resource.categoryId,
+  };
+  next();
+}

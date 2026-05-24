@@ -5,6 +5,7 @@ import StudyGroupLayout from "./components/StudyGroup/StudyGroupLayout";
 import RoomLobby from "./components/StudyGroup/RoomLobby";
 import RoomView from "./components/StudyGroup/RoomView";
 import ProjectTracker from "./components/ProjectTracker";
+import StudyResources from "./components/StudyResources";
 import Analytics from "./Analytics";
 import SignupPage from "./SignupPage";
 import LoginPage from "./LoginPage";
@@ -19,6 +20,7 @@ function DashboardPage() {
       onGoToAnalytics={() => navigate("/analytics")}
       onGoToStudyGroup={() => navigate("/study-group")}
       onGoToProjects={() => navigate("/projects")}
+      onGoToResources={() => navigate("/resources")}
     />
   );
 }
@@ -59,6 +61,14 @@ function App() {
         element={
           <ProtectedRoute>
             <ProjectTracker />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/resources"
+        element={
+          <ProtectedRoute>
+            <StudyResources />
           </ProtectedRoute>
         }
       />
